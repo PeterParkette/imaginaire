@@ -116,7 +116,7 @@ class Meter(object):
             values = dist_all_reduce_tensor(values)
 
         if not all(math.isfinite(x) for x in values):
-            print("meter {} contained a nan or inf.".format(self.name))
+            print(f"meter {self.name} contained a nan or inf.")
             if is_master():
                 wandb.alert(
                     title='NaN',

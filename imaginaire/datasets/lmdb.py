@@ -33,7 +33,7 @@ class LMDBDataset(data.Dataset):
         with open(os.path.join(self.root, '..', 'metadata.json')) as fin:
             self.extensions = json.load(fin)
 
-        print('LMDB file at %s opened.' % (root))
+        print(f'LMDB file at {root} opened.')
 
     def getitem_by_path(self, path, data_type):
         r"""Load data item stored for key = path.

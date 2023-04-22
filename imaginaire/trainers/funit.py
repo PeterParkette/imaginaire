@@ -87,19 +87,17 @@ class Trainer(BaseTrainer):
         # Image reconstruction loss
         if 'image_recon' in self.weights:
             self.gen_losses['image_recon'] = \
-                self.criteria['image_recon'](net_G_output['images_recon'],
+                    self.criteria['image_recon'](net_G_output['images_recon'],
                                              data['images_content'])
 
         # Feature matching loss
         if 'feature_matching' in self.weights:
             self.gen_losses['feature_matching'] = \
-                self.criteria['feature_matching'](
+                    self.criteria['feature_matching'](
                     net_D_output['fake_features_trans'],
                     net_D_output['real_features_style'])
 
-        # Compute total loss
-        total_loss = self._get_total_loss(gen_forward=True)
-        return total_loss
+        return self._get_total_loss(gen_forward=True)
 
     def dis_forward(self, data):
         r"""Compute the loss for FUNIT discriminator.
@@ -118,12 +116,10 @@ class Trainer(BaseTrainer):
         self._time_before_loss()
 
         self.dis_losses['gan'] = \
-            self.criteria['gan'](net_D_output['real_out_style'], True) + \
-            self.criteria['gan'](net_D_output['fake_out_trans'], False)
+                self.criteria['gan'](net_D_output['real_out_style'], True) + \
+                self.criteria['gan'](net_D_output['fake_out_trans'], False)
 
-        # Compute total loss
-        total_loss = self._get_total_loss(gen_forward=False)
-        return total_loss
+        return self._get_total_loss(gen_forward=False)
 
     def _get_visualizations(self, data):
         r"""Compute visualization image.
@@ -229,7 +225,7 @@ class Trainer(BaseTrainer):
                     self.best_kid = min(self.best_kid, cur_kid)
                 else:
                     self.best_kid = cur_kid
-                metric_dict.update({'KID': cur_kid, 'best_KID': self.best_kid})
+                metric_dict |= {'KID': cur_kid, 'best_KID': self.best_kid}
         if self.use_fid:
             cur_fid = self._compute_fid()
             if cur_fid is not None:
@@ -237,7 +233,7 @@ class Trainer(BaseTrainer):
                     self.best_fid = min(self.best_fid, cur_fid)
                 else:
                     self.best_fid = cur_fid
-                metric_dict.update({'FID': cur_fid, 'best_FID': self.best_fid})
+                metric_dict |= {'FID': cur_fid, 'best_FID': self.best_fid}
 
         if is_master():
             self._write_to_meters(metric_dict, self.metric_meters)

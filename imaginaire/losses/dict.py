@@ -10,10 +10,10 @@ class DictLoss(nn.Module):
         super(DictLoss, self).__init__()
         if criterion == 'l1':
             self.criterion = nn.L1Loss()
-        elif criterion == 'l2' or criterion == 'mse':
+        elif criterion in ['l2', 'mse']:
             self.criterion = nn.MSELoss()
         else:
-            raise ValueError('Criterion %s is not recognized' % criterion)
+            raise ValueError(f'Criterion {criterion} is not recognized')
 
     def forward(self, fake, real):
         """Return the target vector for the l1/l2 loss computation.
@@ -28,7 +28,7 @@ class DictLoss(nn.Module):
         if type(fake) == dict:
             for key in fake.keys():
                 loss += self.criterion(fake[key], real[key].detach())
-        elif type(fake) == list or type(fake) == tuple:
+        elif type(fake) in [list, tuple]:
             for f, r in zip(fake, real):
                 loss += self.criterion(f, r.detach())
         else:

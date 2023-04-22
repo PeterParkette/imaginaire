@@ -17,7 +17,7 @@ def _get_1nn_acc(data_x, data_y, k=1):
                        torch.zeros(n1, device=device)))
 
     count = torch.zeros(n0 + n1, device=device)
-    for i in range(0, k):
+    for i in range(k):
         count = count + label.index_select(0, idx[:, i])
     pred = torch.ge(count, (float(k) / 2) *
                     torch.ones(n0 + n1, device=device)).float()

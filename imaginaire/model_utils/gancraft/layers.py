@@ -98,10 +98,7 @@ class ModLinear(nn.Module):
         self.mod_bias = mod_bias
         self.output_mode = output_mode
         if mod_bias:
-            if output_mode:
-                mod_bias_dims = out_features
-            else:
-                mod_bias_dims = in_features
+            mod_bias_dims = out_features if output_mode else in_features
             self.weight_beta = nn.Parameter(torch.randn([mod_bias_dims, style_features]) / np.sqrt(style_features))
             self.bias_beta = nn.Parameter(torch.full([mod_bias_dims], 0, dtype=torch.float))
 
@@ -139,11 +136,7 @@ class ModLinear(nn.Module):
         if b is not None:
             b = b.to(x.dtype)[None, None, :]
         if self.mod_bias and self.output_mode:
-            if b is None:
-                b = beta
-            else:
-                b = b + beta
-
+            b = beta if b is None else b + beta
         # [B ? I] @ [B I O] = [B ? O]
         if b is not None:
             x = torch.baddbmm(b, x, w.transpose(1, 2))

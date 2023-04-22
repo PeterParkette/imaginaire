@@ -9,7 +9,7 @@ import csv
 class ReducedLabelMapper:
     def __init__(self):
         this_path = os.path.dirname(os.path.abspath(__file__))
-        print('[ReducedLabelMapper] Loading from {}'.format(this_path))
+        print(f'[ReducedLabelMapper] Loading from {this_path}')
 
         # Load Minecraft LUT
         mcid2rdlbl_lut = {}
@@ -29,7 +29,7 @@ class ReducedLabelMapper:
             for idx, row in enumerate(csvreader):
                 rdlbl2rdid[row[0]] = idx
                 reduced_lbls.append(row[0])
-        print(['{}: {}'.format(rdid, rdlbl) for rdid, rdlbl in enumerate(reduced_lbls)])
+        print([f'{rdid}: {rdlbl}' for rdid, rdlbl in enumerate(reduced_lbls)])
         # The first label should always be 'ignore'
         assert reduced_lbls[0] == 'ignore'
 
@@ -55,7 +55,7 @@ class ReducedLabelMapper:
         gglbl2rdid = {}
         with open(os.path.join(this_path, 'gaugan_reduction.csv'), newline='') as csvfile:
             csvreader = csv.reader(csvfile, delimiter=',')
-            for idx, row in enumerate(csvreader):
+            for row in csvreader:
                 gglbl = row[0]
                 target_rdlbl = row[1]
                 ggid = gglbl2ggid[gglbl]
@@ -63,7 +63,7 @@ class ReducedLabelMapper:
                 gglbl2rdid[ggid] = target_rdid
         ggid2rdid = [gglbl2rdid[i] for i in range(len(gglbl2rdid))]
 
-        print('[ReducedLabelMapper] #Reduced Labels: {}'.format(len(reduced_lbls)))
+        print(f'[ReducedLabelMapper] #Reduced Labels: {len(reduced_lbls)}')
 
         self.mcid2rdid_lut = mcid2rdid_lut
         self.ggid2rdid = ggid2rdid

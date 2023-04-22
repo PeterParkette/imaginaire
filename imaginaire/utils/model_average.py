@@ -26,10 +26,8 @@ def calibrate_batch_norm_momentum(m):
     Args:
         m: Pytorch module
     """
-    if hasattr(m, 'reset_running_stats'):
-        # if m._get_name() == 'SyncBatchNorm':
-        if 'BatchNorm' in m._get_name():
-            m.momentum = 1.0 / float(m.num_batches_tracked + 1)
+    if hasattr(m, 'reset_running_stats') and 'BatchNorm' in m._get_name():
+        m.momentum = 1.0 / float(m.num_batches_tracked + 1)
 
 
 class ModelAverage(nn.Module):
@@ -95,10 +93,7 @@ class ModelAverage(nn.Module):
     def update_average(self):
         r"""Update the moving average."""
         self.num_updates_tracked += 1
-        if self.num_updates_tracked <= self.start_iteration:
-            beta = 0.
-        else:
-            beta = self.beta
+        beta = 0. if self.num_updates_tracked <= self.start_iteration else self.beta
         source_dict = self.module.state_dict()
         target_dict = self.averaged_model.state_dict()
         for key in target_dict:
@@ -107,15 +102,13 @@ class ModelAverage(nn.Module):
             if self.remove_wn_wrapper:
                 if key.endswith('weight'):
                     # This is a weight parameter.
-                    if key + '_ori' in source_dict:
+                    if f'{key}_ori' in source_dict:
                         # This parameter has scaled lr.
-                        source_param = \
-                            source_dict[key + '_ori'] * \
-                            source_dict[key + '_scale']
-                    elif key + '_orig' in source_dict:
+                        source_param = (source_dict[f'{key}_ori'] * source_dict[f'{key}_scale'])
+                    elif f'{key}_orig' in source_dict:
                         # This parameter has spectral norm
                         # but not scaled lr.
-                        source_param = source_dict[key + '_orig']
+                        source_param = source_dict[f'{key}_orig']
                     elif key in source_dict:
                         # This parameter does not have
                         # weight normalization wrappers.
@@ -127,17 +120,16 @@ class ModelAverage(nn.Module):
                         )
                     source_param = source_param.detach()
 
-                    if key + '_orig' in source_dict:
+                    if f'{key}_orig' in source_dict:
                         # This parameter has spectral norm.
                         source_param = self.sn_compute_weight(
                             source_param,
-                            source_dict[key + '_u'],
-                            source_dict[key + '_v'],
+                            source_dict[f'{key}_u'],
+                            source_dict[f'{key}_v'],
                         )
-                elif key.endswith('bias') and key + '_ori' in source_dict:
+                elif key.endswith('bias') and f'{key}_ori' in source_dict:
                     # This is a bias parameter and has scaled lr.
-                    source_param = source_dict[key + '_ori'] * \
-                                   source_dict[key + '_scale']
+                    source_param = (source_dict[f'{key}_ori'] * source_dict[f'{key}_scale'])
                 else:
                     # This is a normal parameter.
                     source_param = source_dict[key]

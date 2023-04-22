@@ -61,7 +61,7 @@ class Generator(Base3DGenerator):
 
         # Camera sampler.
         self.camera_sampler_type = getattr(gen_cfg, 'camera_sampler_type', "random")
-        assert self.camera_sampler_type in ['random', 'traditional']
+        assert self.camera_sampler_type in {'random', 'traditional'}
         self.camera_min_entropy = getattr(gen_cfg, 'camera_min_entropy', -1)
         self.camera_rej_avg_depth = getattr(gen_cfg, 'camera_rej_avg_depth', -1)
         self.cam_res = gen_cfg.cam_res
@@ -94,7 +94,7 @@ class Generator(Base3DGenerator):
             depth2_batch = []
             raydirs_batch = []
             cam_ori_t_batch = []
-            for b in range(batch_size):
+            for _ in range(batch_size):
                 while True:  # Rejection sampling.
                     # Sample camera pose.
                     if self.camera_sampler_type == 'random':
@@ -111,11 +111,11 @@ class Generator(Base3DGenerator):
                         dice = torch.rand(1).item()
                         if dice > 0.5:
                             cam_ori_t, cam_dir_t, cam_up_t, cam_f = \
-                                camctl.rand_camera_pose_tour(self.voxel)
+                                    camctl.rand_camera_pose_tour(self.voxel)
                             cam_f = cam_f * (cam_res[1]-1)
                         else:
                             cam_ori_t, cam_dir_t, cam_up_t = \
-                                camctl.rand_camera_pose_thridperson2(self.voxel)
+                                    camctl.rand_camera_pose_thridperson2(self.voxel)
                             # ~24mm fov horizontal.
                             cam_f = 0.5 / np.tan(np.deg2rad(73/2) * (np.random.rand(1)*0.5+0.5)) * (cam_res[1]-1)
 
@@ -123,7 +123,8 @@ class Generator(Base3DGenerator):
                         cam_c = mc_utils.rand_crop(cam_c, cam_res, cam_res_crop)
                     else:
                         raise NotImplementedError(
-                            'Unknown self.camera_sampler_type: {}'.format(self.camera_sampler_type))
+                            f'Unknown self.camera_sampler_type: {self.camera_sampler_type}'
+                        )
                     # Run ray-voxel intersection test
                     r"""Ray-voxel intersection CUDA kernel.
                     Note: voxel_id = 0 and depth2 = NaN if there is no intersection along the ray
@@ -160,7 +161,7 @@ class Generator(Base3DGenerator):
                         # Check entropy.
                         maskcnt = torch.bincount(
                             torch.flatten(voxel_id[:, :, 0, 0]), weights=None, minlength=680).float() / \
-                            (voxel_id.size(0)*voxel_id.size(1))
+                                (voxel_id.size(0)*voxel_id.size(1))
                         maskentropy = -torch.sum(maskcnt * torch.log(maskcnt+1e-10))
                         if maskentropy < self.camera_min_entropy:
                             continue
@@ -330,16 +331,16 @@ class Generator(Base3DGenerator):
             pseudo_real_img = data['pseudo_real_img']
 
         z, mu, logvar = None, None, None
-        if random_style:
-            if self.style_dims > 0:
-                z = torch.randn(batch_size, self.style_dims, dtype=torch.float32, device=device)
-        else:
-            if self.style_encoder is None:
-                # ================ Get Style Code =================
-                if self.style_dims > 0:
-                    z = torch.randn(batch_size, self.style_dims, dtype=torch.float32, device=device)
-            else:
-                mu, logvar, z = self.style_encoder(pseudo_real_img)
+        if (
+            random_style
+            and self.style_dims > 0
+            or not random_style
+            and self.style_encoder is None
+            and self.style_dims > 0
+        ):
+            z = torch.randn(batch_size, self.style_dims, dtype=torch.float32, device=device)
+        elif not random_style and self.style_encoder is not None:
+            mu, logvar, z = self.style_encoder(pseudo_real_img)
 
         # ================ Network Forward ================
         # Forward StyleNet
@@ -348,7 +349,7 @@ class Generator(Base3DGenerator):
 
         # Forward per-pixel net.
         net_out, new_dists, weights, total_weights_raw, rand_depth, net_out_s, net_out_c, skynet_out_c, nosky_mask, \
-            sky_mask, sky_only_mask, new_idx = self._forward_perpix(
+                sky_mask, sky_only_mask, new_idx = self._forward_perpix(
                 self.blk_feats, voxel_id, depth2, raydirs, cam_ori_t, z)
 
         # Forward global net.
@@ -356,12 +357,7 @@ class Generator(Base3DGenerator):
         if self.pad != 0:
             fake_images = fake_images[:, :, self.pad//2:-self.pad//2, self.pad//2:-self.pad//2]
 
-        # =============== Arrange Return Values ================
-        output = {}
-        output['fake_images'] = fake_images
-        output['mu'] = mu
-        output['logvar'] = logvar
-        return output
+        return {'fake_images': fake_images, 'mu': mu, 'logvar': logvar}
 
     def inference(self,
                   output_dir,
@@ -433,8 +429,8 @@ class Generator(Base3DGenerator):
         os.makedirs(gancraft_outputs_dir, exist_ok=True)
         vis_masks_dir = os.path.join(output_dir, 'vis_masks')
         os.makedirs(vis_masks_dir, exist_ok=True)
-        fout = imageio.get_writer(gancraft_outputs_dir + '.mp4', fps=1)
-        fout_cat = imageio.get_writer(gancraft_outputs_dir + '-vis_masks.mp4', fps=1)
+        fout = imageio.get_writer(f'{gancraft_outputs_dir}.mp4', fps=1)
+        fout_cat = imageio.get_writer(f'{gancraft_outputs_dir}-vis_masks.mp4', fps=1)
 
         evalcamctl = camctl.EvalCameraController(
             self.voxel, maxstep=cam_maxstep, pattern=camera_mode, cam_ang=cam_ang,
@@ -520,7 +516,7 @@ class Generator(Base3DGenerator):
                     raydirs = raydirs_all[:, strip_begin_h:strip_end_h, strip_begin_w:strip_end_w, :, :]
 
                     net_out, new_dists, weights, total_weights_raw, rand_depth, net_out_s, net_out_c, skynet_out_c, \
-                        nosky_mask, sky_mask, sky_only_mask, new_idx = self._forward_perpix(
+                            nosky_mask, sky_mask, sky_only_mask, new_idx = self._forward_perpix(
                             self.blk_feats, voxel_id, depth2, raydirs, cam_ori_t, z)
                     fake_images, _ = self._forward_global(net_out, z)
 

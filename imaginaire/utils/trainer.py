@@ -93,9 +93,9 @@ def get_model_optimizer_and_scheduler(cfg, seed=0):
     lib_D = importlib.import_module(cfg.dis.type)
     net_G = lib_G.Generator(cfg.gen, cfg.data)
     net_D = lib_D.Discriminator(cfg.dis, cfg.data)
-    print('Initialize net_G and net_D weights using '
-          'type: {} gain: {}'.format(cfg.trainer.init.type,
-                                     cfg.trainer.init.gain))
+    print(
+        f'Initialize net_G and net_D weights using type: {cfg.trainer.init.type} gain: {cfg.trainer.init.gain}'
+    )
     init_bias = getattr(cfg.trainer.init, 'bias', None)
     net_G.apply(weights_init(
         cfg.trainer.init.type, cfg.trainer.init.gain, init_bias))
@@ -336,6 +336,5 @@ def get_optimizer_for_params(cfg_opt, params):
                       momentum=cfg_opt.momentum,
                       weight_decay=cfg_opt.weight_decay)
     else:
-        raise NotImplementedError(
-            'Optimizer {} is not yet implemented.'.format(cfg_opt.type))
+        raise NotImplementedError(f'Optimizer {cfg_opt.type} is not yet implemented.')
     return opt

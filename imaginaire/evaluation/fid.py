@@ -56,10 +56,7 @@ def compute_fid(fid_path, data_loader, net_G,
     if is_master():
         fid = _calculate_frechet_distance(
             fake_act, real_act)["FID"]
-        if return_act:
-            return fid, real_act, fake_act
-        else:
-            return fid
+        return (fid, real_act, fake_act) if return_act else fid
     elif return_act:
         return None, None, None
     else:
@@ -135,8 +132,8 @@ def _calculate_frechet_distance(act_1, act_2, eps=1e-6):
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             m = np.max(np.abs(covmean.imag))
-            print('Imaginary component {}'.format(m))
-            # raise ValueError('Imaginary component {}'.format(m))
+            print(f'Imaginary component {m}')
+                    # raise ValueError('Imaginary component {}'.format(m))
         covmean = covmean.real
     tr_covmean = np.trace(covmean)
     return {"FID": (diff.dot(diff) + np.trace(sigma1) + np.trace(

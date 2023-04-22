@@ -127,7 +127,7 @@ def compute_all_metrics(act_dir,
                 print(f"{metric} is not implemented!")
                 raise NotImplementedError
             for k, v in metric_dict.items():
-                all_metrics.update({key_prefix + k: v})
+                all_metrics[key_prefix + k] = v
     if dist.is_initialized():
         dist.barrier()
     return all_metrics
@@ -242,7 +242,7 @@ def compute_all_metrics_data(data_loader_a,
                 print(f"{metric} is not implemented!")
                 raise NotImplementedError
             for k, v in metric_dict.items():
-                all_metrics.update({key_prefix + k: v})
+                all_metrics[key_prefix + k] = v
     if dist.is_initialized():
         dist.barrier()
     return all_metrics
@@ -402,9 +402,7 @@ def get_outputs(data_loader, key_real, key_fake,
 
     model = model.to('cuda').eval()
     world_size = get_world_size()
-    output = {}
-    for k in output_module_dict.keys():
-        output[k] = []
+    output = {k: [] for k in output_module_dict.keys()}
     output["activations"] = []
 
     # Iterate through the dataset to compute the activation.
@@ -479,8 +477,12 @@ def get_video_activations(data_loader, key_real, key_fake, trainer=None,
         num_videos_to_test = num_sequences
     else:
         num_videos_to_test = min(num_videos_to_test, num_sequences)
-    master_only_print('Number of videos used for evaluation: {}'.format(num_videos_to_test))
-    master_only_print('Number of frames per video used for evaluation: {}'.format(num_frames_per_video))
+    master_only_print(
+        f'Number of videos used for evaluation: {num_videos_to_test}'
+    )
+    master_only_print(
+        f'Number of frames per video used for evaluation: {num_frames_per_video}'
+    )
 
     world_size = get_world_size()
     if num_videos_to_test < world_size:
@@ -586,7 +588,7 @@ def load_or_compute_activations(act_path, data_loader, key_real, key_fake,
     """
     if act_path is not None and os.path.exists(act_path):
         # Loading precomputed activations.
-        print('Load activations from {}'.format(act_path))
+        print(f'Load activations from {act_path}')
         act = torch.load(act_path, map_location='cpu').cuda()
     else:
         # Compute activations.
@@ -601,7 +603,7 @@ def load_or_compute_activations(act_path, data_loader, key_real, key_fake,
                 sample_size, preprocess, **kwargs
             )
         if act_path is not None and is_local_master():
-            print('Save activations to {}'.format(act_path))
+            print(f'Save activations to {act_path}')
             if not os.path.exists(os.path.dirname(act_path)):
                 os.makedirs(os.path.dirname(act_path), exist_ok=True)
             torch.save(act, act_path)
@@ -628,8 +630,7 @@ def compute_pairwise_distance(data_x, data_y=None, num_splits=10):
         end_idx = min((i + 1) * batch_size, num_samples)
         dists.append(torch.cdist(data_x[start_idx:end_idx],
                                  data_y).cpu())
-    dists = torch.cat(dists, dim=0)
-    return dists
+    return torch.cat(dists, dim=0)
 
 
 def compute_nn(input_features, k, num_splits=50):

@@ -50,35 +50,34 @@ class _BaseDeepResBlock(nn.Module):
             raise ValueError('order must be either 5 or 6 characters')
         hidden_channels = in_channels // hidden_channel_ratio
 
-        # Parameters.
-        residual_params = {}
-        shortcut_params = {}
         base_params = dict(dilation=dilation,
                            groups=groups,
                            padding_mode=padding_mode)
-        residual_params.update(base_params)
-        residual_params.update(
-            dict(activation_norm_type=activation_norm_type,
-                 activation_norm_params=activation_norm_params,
-                 weight_norm_type=weight_norm_type,
-                 weight_norm_params=weight_norm_params,
-                 apply_noise=apply_noise)
+        residual_params = base_params | dict(
+            activation_norm_type=activation_norm_type,
+            activation_norm_params=activation_norm_params,
+            weight_norm_type=weight_norm_type,
+            weight_norm_params=weight_norm_params,
+            apply_noise=apply_noise,
         )
-        shortcut_params.update(base_params)
-        shortcut_params.update(dict(kernel_size=1))
+        shortcut_params = base_params | {'kernel_size': 1}
         if skip_activation_norm:
-            shortcut_params.update(
-                dict(activation_norm_type=activation_norm_type,
-                     activation_norm_params=activation_norm_params,
-                     apply_noise=False))
+            shortcut_params |= dict(
+                activation_norm_type=activation_norm_type,
+                activation_norm_params=activation_norm_params,
+                apply_noise=False,
+            )
         if skip_weight_norm:
-            shortcut_params.update(
-                dict(weight_norm_type=weight_norm_type,
-                     weight_norm_params=weight_norm_params))
+            shortcut_params |= dict(
+                weight_norm_type=weight_norm_type,
+                weight_norm_params=weight_norm_params,
+            )
 
         # Residual branch.
-        if order.find('A') < order.find('C') and \
-                (activation_norm_type == '' or activation_norm_type == 'none'):
+        if order.find('A') < order.find('C') and activation_norm_type in [
+            '',
+            'none',
+        ]:
             # Nonlinearity is the first operation in the residual path.
             # In-place nonlinearity will modify the input variable and cause
             # backward error.
@@ -90,23 +89,28 @@ class _BaseDeepResBlock(nn.Module):
          first_blur, second_blur, shortcut_blur) = self._get_stride_blur()
 
         self.conv_block_1x1_in = block(
-            in_channels, hidden_channels,
-            1, 1, 0,
+            in_channels,
+            hidden_channels,
+            1,
+            1,
+            0,
             bias=biases[0],
             nonlinearity=nonlinearity,
-            order=order[0:3],
+            order=order[:3],
             inplace_nonlinearity=first_inplace,
             **residual_params
         )
 
         self.conv_block_0 = block(
-            hidden_channels, hidden_channels,
-            kernel_size=2 if self.border_free and first_stride < 1 else
-            kernel_size,
+            hidden_channels,
+            hidden_channels,
+            kernel_size=2
+            if self.border_free and first_stride < 1
+            else kernel_size,
             padding=padding,
             bias=biases[0],
             nonlinearity=nonlinearity,
-            order=order[0:3],
+            order=order[:3],
             inplace_nonlinearity=inplace_nonlinearity,
             stride=first_stride,
             blur=first_blur,
@@ -126,62 +130,60 @@ class _BaseDeepResBlock(nn.Module):
         )
 
         self.conv_block_1x1_out = block(
-            hidden_channels, out_channels,
-            1, 1, 0,
+            hidden_channels,
+            out_channels,
+            1,
+            1,
+            0,
             bias=biases[1],
             nonlinearity=nonlinearity,
-            order=order[0:3],
+            order=order[:3],
             inplace_nonlinearity=inplace_nonlinearity,
             **residual_params
         )
 
         # Shortcut branch.
         if self.learn_shortcut:
-            if skip_nonlinearity:
-                skip_nonlinearity_type = nonlinearity
-            else:
-                skip_nonlinearity_type = ''
-            self.conv_block_s = skip_block(in_channels, out_channels,
-                                           bias=biases[2],
-                                           nonlinearity=skip_nonlinearity_type,
-                                           order=order[0:3],
-                                           stride=shortcut_stride,
-                                           blur=shortcut_blur,
-                                           **shortcut_params)
+            skip_nonlinearity_type = nonlinearity if skip_nonlinearity else ''
+            self.conv_block_s = skip_block(
+                in_channels,
+                out_channels,
+                bias=biases[2],
+                nonlinearity=skip_nonlinearity_type,
+                order=order[:3],
+                stride=shortcut_stride,
+                blur=shortcut_blur,
+                **shortcut_params
+            )
         elif in_channels < out_channels:
-            if skip_nonlinearity:
-                skip_nonlinearity_type = nonlinearity
-            else:
-                skip_nonlinearity_type = ''
-            self.conv_block_s = skip_block(in_channels,
-                                           out_channels - in_channels,
-                                           bias=biases[2],
-                                           nonlinearity=skip_nonlinearity_type,
-                                           order=order[0:3],
-                                           stride=shortcut_stride,
-                                           blur=shortcut_blur,
-                                           **shortcut_params)
+            skip_nonlinearity_type = nonlinearity if skip_nonlinearity else ''
+            self.conv_block_s = skip_block(
+                in_channels,
+                out_channels - in_channels,
+                bias=biases[2],
+                nonlinearity=skip_nonlinearity_type,
+                order=order[:3],
+                stride=shortcut_stride,
+                blur=shortcut_blur,
+                **shortcut_params
+            )
 
         # Whether this block expects conditional inputs.
         self.conditional = \
-            getattr(self.conv_block_0, 'conditional', False) or \
-            getattr(self.conv_block_1, 'conditional', False) or \
-            getattr(self.conv_block_1x1_in, 'conditional', False) or \
-            getattr(self.conv_block_1x1_out, 'conditional', False)
+                getattr(self.conv_block_0, 'conditional', False) or \
+                getattr(self.conv_block_1, 'conditional', False) or \
+                getattr(self.conv_block_1x1_in, 'conditional', False) or \
+                getattr(self.conv_block_1x1_out, 'conditional', False)
 
     def _get_stride_blur(self):
+        shortcut_stride = 1
         if self.stride > 1:
             # Downsampling.
             first_stride, second_stride = 1, self.stride
             first_blur, second_blur = False, self.blur
-            shortcut_blur = False
-            shortcut_stride = 1
             if self.blur:
                 # The shortcut branch uses blur_downsample + stride-1 conv
-                if self.border_free:
-                    self.resample = nn.AvgPool2d(2)
-                else:
-                    self.resample = BlurDownsample()
+                self.resample = nn.AvgPool2d(2) if self.border_free else BlurDownsample()
             else:
                 shortcut_stride = self.stride
                 self.resample = nn.AvgPool2d(2)
@@ -189,8 +191,6 @@ class _BaseDeepResBlock(nn.Module):
             # Upsampling.
             first_stride, second_stride = self.stride, 1
             first_blur, second_blur = self.blur, False
-            shortcut_blur = False
-            shortcut_stride = 1
             if self.blur:
                 # The shortcut branch uses blur_upsample + stride-1 conv
                 if self.border_free:
@@ -204,9 +204,8 @@ class _BaseDeepResBlock(nn.Module):
         else:
             first_stride = second_stride = 1
             first_blur = second_blur = False
-            shortcut_stride = 1
-            shortcut_blur = False
             self.resample = None
+        shortcut_blur = False
         return (first_stride, second_stride, shortcut_stride,
                 first_blur, second_blur, shortcut_blur)
 

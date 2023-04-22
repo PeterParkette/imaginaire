@@ -68,15 +68,16 @@ class BlurUpsample(nn.Module):
         self.padding_mode = padding_mode
 
     def forward(self, x):
-        if self.padding_mode != 'zeros':
-            x = F.pad(x, list(self.pad) * 2, mode=self.padding_mode)
-            out = upfirdn2d(
-                x, self.kernel, up=self.factor, gain=self.factor ** 2)
-        else:
-            out = upfirdn2d(
-                x, self.kernel, up=self.factor, padding=self.pad,
-                gain=self.factor ** 2)
-        return out
+        if self.padding_mode == 'zeros':
+            return upfirdn2d(
+                x,
+                self.kernel,
+                up=self.factor,
+                padding=self.pad,
+                gain=self.factor**2,
+            )
+        x = F.pad(x, list(self.pad) * 2, mode=self.padding_mode)
+        return upfirdn2d(x, self.kernel, up=self.factor, gain=self.factor**2)
 
     def extra_repr(self):
         s = 'kernel={kernel_1d}, ' \
@@ -100,12 +101,10 @@ class BlurDownsample(nn.Module):
         self.padding_mode = padding_mode
 
     def forward(self, x):
-        if self.padding_mode != 'zeros':
-            x = F.pad(x, list(self.pad) * 2, mode=self.padding_mode)
-            out = upfirdn2d(x, self.kernel, down=self.factor)
-        else:
-            out = upfirdn2d(x, self.kernel, down=self.factor, padding=self.pad)
-        return out
+        if self.padding_mode == 'zeros':
+            return upfirdn2d(x, self.kernel, down=self.factor, padding=self.pad)
+        x = F.pad(x, list(self.pad) * 2, mode=self.padding_mode)
+        return upfirdn2d(x, self.kernel, down=self.factor)
 
     def extra_repr(self):
         s = 'kernel={kernel_1d}, ' \
@@ -125,12 +124,10 @@ class Blur(nn.Module):
         self.pad = pad
 
     def forward(self, x):
-        if self.padding_mode != 'zeros':
-            x = F.pad(x, list(self.pad) * 2, mode=self.padding_mode)
-            out = upfirdn2d(x, self.kernel)
-        else:
-            out = upfirdn2d(x, self.kernel, padding=self.pad)
-        return out
+        if self.padding_mode == 'zeros':
+            return upfirdn2d(x, self.kernel, padding=self.pad)
+        x = F.pad(x, list(self.pad) * 2, mode=self.padding_mode)
+        return upfirdn2d(x, self.kernel)
 
     def extra_repr(self):
         s = 'kernel={kernel_1d}, ' \
@@ -286,7 +283,7 @@ def _upfirdn2d_ref(x, f, up=1, down=1, padding=0, flip_filter=False, gain=1):
 
 # ----------------------------------------------------------------------------
 
-_upfirdn2d_cuda_cache = dict()
+_upfirdn2d_cuda_cache = {}
 
 
 def _upfirdn2d_cuda(up=1, down=1, padding=0, flip_filter=False, gain=1):

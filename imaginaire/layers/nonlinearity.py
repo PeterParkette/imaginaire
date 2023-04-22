@@ -58,8 +58,8 @@ def get_nonlinearity_layer(nonlinearity_type, inplace, **kwargs):
     elif nonlinearity_type.startswith('softmax'):
         dim = nonlinearity_type.split(',')[1] if ',' in nonlinearity_type else 1
         nonlinearity = nn.Softmax(dim=int(dim))
-    elif nonlinearity_type == 'none' or nonlinearity_type == '':
+    elif nonlinearity_type in ['none', '']:
         nonlinearity = None
     else:
-        raise ValueError('Nonlinearity %s is not recognized' % nonlinearity_type)
+        raise ValueError(f'Nonlinearity {nonlinearity_type} is not recognized')
     return nonlinearity

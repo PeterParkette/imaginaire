@@ -32,8 +32,7 @@ def parse_args():
     parser.add_argument('--single_gpu', action='store_true')
     parser.add_argument('--num_workers', type=int)
     parser.add_argument('--debug', action='store_true')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():

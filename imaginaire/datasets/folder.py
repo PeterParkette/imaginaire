@@ -25,7 +25,7 @@ class FolderDataset(data.Dataset):
         self.root = os.path.expanduser(root)
         self.extensions = metadata
 
-        print('Folder at %s opened.' % (root))
+        print(f'Folder at {root} opened.')
 
     def getitem_by_path(self, path, data_type):
         r"""Load data item stored for key = path.
@@ -45,7 +45,7 @@ class FolderDataset(data.Dataset):
             if 'tif' in ext:
                 dtype, mode = np.uint16, -1
             elif 'JPEG' in ext or 'JPG' in ext \
-                    or 'jpeg' in ext or 'jpg' in ext:
+                        or 'jpeg' in ext or 'jpg' in ext:
                 dtype, mode = np.uint8, 3
             else:
                 dtype, mode = np.uint8, -1
@@ -55,8 +55,8 @@ class FolderDataset(data.Dataset):
             is_image = False
 
         # Get value from key.
-        filepath = os.path.join(self.root, path.decode() + '.' + ext)
-        assert os.path.exists(filepath), '%s does not exist' % (filepath)
+        filepath = os.path.join(self.root, f'{path.decode()}.{ext}')
+        assert os.path.exists(filepath), f'{filepath} does not exist'
         with open(filepath, 'rb') as f:
             buf = f.read()
 

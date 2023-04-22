@@ -97,10 +97,11 @@ class StyleMLP(nn.Module):
 
         self.normalize_input = normalize_input
         self.output_act = output_act
-        fc_layers = []
-        fc_layers.append(nn.Linear(style_dim, hidden_channels, bias=True))
-        for i in range(num_layers-1):
-            fc_layers.append(nn.Linear(hidden_channels, hidden_channels, bias=True))
+        fc_layers = [nn.Linear(style_dim, hidden_channels, bias=True)]
+        fc_layers.extend(
+            nn.Linear(hidden_channels, hidden_channels, bias=True)
+            for _ in range(num_layers - 1)
+        )
         self.fc_layers = nn.ModuleList(fc_layers)
 
         self.fc_out = nn.Linear(hidden_channels, out_dim, bias=True)
@@ -164,9 +165,7 @@ class SKYMLP(nn.Module):
         y = self.act(self.fc3(y))
         y = self.act(self.fc4(y))
         y = self.act(self.fc5(y))
-        c = self.fc_out_c(y)
-
-        return c
+        return self.fc_out_c(y)
 
 
 class RenderCNN(nn.Module):
@@ -373,10 +372,10 @@ class Base3DGenerator(nn.Module):
         self.clip_feat_map = getattr(gen_cfg, 'clip_feat_map', True)
         self.keep_sky_out = getattr(gen_cfg, 'keep_sky_out', False)
         self.keep_sky_out_avgpool = getattr(gen_cfg, 'keep_sky_out_avgpool', False)
-        keep_sky_out_learnbg = getattr(gen_cfg, 'keep_sky_out_learnbg', False)
         self.sky_global_avgpool = getattr(gen_cfg, 'sky_global_avgpool', False)
         if self.keep_sky_out:
             self.sky_replace_color = None
+            keep_sky_out_learnbg = getattr(gen_cfg, 'keep_sky_out_learnbg', False)
             if keep_sky_out_learnbg:
                 sky_replace_color = torch.zeros([final_feat_dim])
                 sky_replace_color.requires_grad = True
@@ -404,9 +403,7 @@ class Base3DGenerator(nn.Module):
         else:
             optimize_parameters = self.parameters()
 
-        param_groups = []
-        param_groups.append({'params': optimize_parameters})
-
+        param_groups = [{'params': optimize_parameters}]
         if hasattr(cfg_opt, 'param_groups'):
             optimized_param_names = []
             all_param_names = [k for k, v in self.named_parameters()]
@@ -416,7 +413,7 @@ class Base3DGenerator(nn.Module):
                 params = getattr(self, k)
                 named_parameters = [k]
                 if issubclass(type(params), nn.Module):
-                    named_parameters = [k+'.'+pname for pname, _ in params.named_parameters()]
+                    named_parameters = [f'{k}.{pname}' for pname, _ in params.named_parameters()]
                     params = params.parameters()
                 param_groups.append({'params': params, **v})
                 optimized_param_names.extend(named_parameters)
@@ -453,14 +450,13 @@ class Base3DGenerator(nn.Module):
 
         if self.pe_params[0] == 0 and self.pe_params[1] is True:  # no PE shortcut, saves ~400MB
             feature_in = proj_feature
+        elif self.pe_no_pe_feat_dim > 0:
+            feature_in = voxlib.positional_encoding(
+                proj_feature[..., :-self.pe_no_pe_feat_dim].contiguous(), self.pe_params[0], -1, self.pe_params[1])
+            feature_in = torch.cat([feature_in, proj_feature[..., -self.pe_no_pe_feat_dim:]], dim=-1)
         else:
-            if self.pe_no_pe_feat_dim > 0:
-                feature_in = voxlib.positional_encoding(
-                    proj_feature[..., :-self.pe_no_pe_feat_dim].contiguous(), self.pe_params[0], -1, self.pe_params[1])
-                feature_in = torch.cat([feature_in, proj_feature[..., -self.pe_no_pe_feat_dim:]], dim=-1)
-            else:
-                feature_in = voxlib.positional_encoding(
-                    proj_feature.contiguous(), self.pe_params[0], -1, self.pe_params[1])
+            feature_in = voxlib.positional_encoding(
+                proj_feature.contiguous(), self.pe_params[0], -1, self.pe_params[1])
 
         net_out_s, net_out_c = self.render_net(feature_in, raydirs_in, z, mc_masks_onehot, **render_net_extra_kwargs)
 
@@ -540,50 +536,53 @@ class Base3DGenerator(nn.Module):
 
         # Avoid sky leakage
         sky_weight = 1.0-total_weights
-        if self.keep_sky_out:
-            # keep_sky_out_avgpool overrides sky_replace_color
-            if self.sky_replace_color is None or self.keep_sky_out_avgpool:
-                if self.keep_sky_out_avgpool:
-                    if hasattr(self, 'sky_avg'):
-                        sky_avg = self.sky_avg
-                    else:
-                        if self.sky_global_avgpool:
-                            sky_avg = torch.mean(skynet_out_c, dim=[1, 2], keepdim=True)
-                        else:
-                            skynet_out_c_nchw = skynet_out_c.permute(0, 4, 1, 2, 3).squeeze(-1)
-                            sky_avg = F.avg_pool2d(skynet_out_c_nchw, 31, stride=1, padding=15, count_include_pad=False)
-                            sky_avg = sky_avg.permute(0, 2, 3, 1).unsqueeze(-2)
-                    # print(sky_avg.shape)
-                    skynet_out_c = skynet_out_c * (1.0-nosky_mask) + sky_avg*(nosky_mask)
+        if (
+            self.sky_replace_color is None
+            and self.keep_sky_out_avgpool
+            or self.sky_replace_color is not None
+            and self.keep_sky_out_avgpool
+        ):
+            if self.keep_sky_out:
+                if hasattr(self, 'sky_avg'):
+                    sky_avg = self.sky_avg
+                elif self.sky_global_avgpool:
+                    sky_avg = torch.mean(skynet_out_c, dim=[1, 2], keepdim=True)
                 else:
-                    sky_weight = sky_weight * (1.0-nosky_mask)
-            else:
-                skynet_out_c = skynet_out_c * (1.0-nosky_mask) + self.sky_replace_color*(nosky_mask)
+                    skynet_out_c_nchw = skynet_out_c.permute(0, 4, 1, 2, 3).squeeze(-1)
+                    sky_avg = F.avg_pool2d(skynet_out_c_nchw, 31, stride=1, padding=15, count_include_pad=False)
+                    sky_avg = sky_avg.permute(0, 2, 3, 1).unsqueeze(-2)
+                # print(sky_avg.shape)
+                skynet_out_c = skynet_out_c * (1.0-nosky_mask) + sky_avg*(nosky_mask)
+        elif self.sky_replace_color is None:
+            if self.keep_sky_out:
+                sky_weight = sky_weight * (1.0-nosky_mask)
+        elif self.keep_sky_out:
+            skynet_out_c = skynet_out_c * (1.0-nosky_mask) + self.sky_replace_color*(nosky_mask)
 
         if self.clip_feat_map is True:  # intermediate feature before blending & CNN
             rgbs = torch.clamp(net_out_c, -1, 1) + 1
             rgbs_sky = torch.clamp(skynet_out_c, -1, 1) + 1
             net_out = torch.sum(weights*rgbs, dim=-2, keepdim=True) + sky_weight * \
-                rgbs_sky  # 576, 768, 4, 3 -> 576, 768, 3
+                    rgbs_sky  # 576, 768, 4, 3 -> 576, 768, 3
             net_out = net_out.squeeze(-2)
             net_out = net_out - 1
         elif self.clip_feat_map is False:
             rgbs = net_out_c
             rgbs_sky = skynet_out_c
             net_out = torch.sum(weights*rgbs, dim=-2, keepdim=True) + sky_weight * \
-                rgbs_sky  # 576, 768, 4, 3 -> 576, 768, 3
+                    rgbs_sky  # 576, 768, 4, 3 -> 576, 768, 3
             net_out = net_out.squeeze(-2)
         elif self.clip_feat_map == 'tanh':
             rgbs = torch.tanh(net_out_c)
             rgbs_sky = torch.tanh(skynet_out_c)
             net_out = torch.sum(weights*rgbs, dim=-2, keepdim=True) + sky_weight * \
-                rgbs_sky  # 576, 768, 4, 3 -> 576, 768, 3
+                    rgbs_sky  # 576, 768, 4, 3 -> 576, 768, 3
             net_out = net_out.squeeze(-2)
         else:
             raise NotImplementedError
 
         return net_out, new_dists, weights, total_weights_raw, rand_depth, net_out_s, net_out_c, skynet_out_c, \
-            nosky_mask, sky_mask, sky_only_mask, new_idx
+                nosky_mask, sky_mask, sky_only_mask, new_idx
 
     def _forward_global(self, net_out, z):
         r"""Forward the CNN

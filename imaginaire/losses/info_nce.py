@@ -68,9 +68,8 @@ class InfoNCELoss(nn.Module):
         loss_a = self._forward_single_direction(features_a, features_b, gather_distributed)
         if self.single_direction:
             return loss_a
-        else:
-            loss_b = self._forward_single_direction(features_b, features_a, gather_distributed)
-            return loss_a + loss_b
+        loss_b = self._forward_single_direction(features_b, features_a, gather_distributed)
+        return loss_a + loss_b
 
     def _forward_single_direction(
             self, features_a, features_b, gather_distributed):
@@ -83,5 +82,4 @@ class InfoNCELoss(nn.Module):
         else:
             gather_labels_a = torch.arange(bs_a, device='cuda')
             logits_a = logit_scale * features_a @ features_b.t()
-        loss_a = F.cross_entropy(logits_a, gather_labels_a)
-        return loss_a
+        return F.cross_entropy(logits_a, gather_labels_a)

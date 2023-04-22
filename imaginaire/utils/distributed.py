@@ -29,20 +29,16 @@ def init_dist(local_rank, backend='nccl', **kwargs):
 
 def get_rank():
     r"""Get rank of the thread."""
-    rank = 0
-    if dist.is_available():
-        if dist.is_initialized():
-            rank = dist.get_rank()
-    return rank
+    return dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
 
 
 def get_world_size():
     r"""Get world size. How many GPUs are available in this job."""
-    world_size = 1
-    if dist.is_available():
-        if dist.is_initialized():
-            world_size = dist.get_world_size()
-    return world_size
+    return (
+        dist.get_world_size()
+        if dist.is_available() and dist.is_initialized()
+        else 1
+    )
 
 
 def master_only(func):
@@ -50,10 +46,8 @@ def master_only(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         r"""Simple function wrapper for the master function"""
-        if get_rank() == 0:
-            return func(*args, **kwargs)
-        else:
-            return None
+        return func(*args, **kwargs) if get_rank() == 0 else None
+
     return wrapper
 
 
@@ -82,9 +76,7 @@ def dist_reduce_tensor(tensor, rank=0, reduce='mean'):
         if get_rank() == rank:
             if reduce == 'mean':
                 tensor /= world_size
-            elif reduce == 'sum':
-                pass
-            else:
+            elif reduce != 'sum':
                 raise NotImplementedError
     return tensor
 
@@ -98,9 +90,7 @@ def dist_all_reduce_tensor(tensor, reduce='mean'):
         dist.all_reduce(tensor)
         if reduce == 'mean':
             tensor /= world_size
-        elif reduce == 'sum':
-            pass
-        else:
+        elif reduce != 'sum':
             raise NotImplementedError
     return tensor
 

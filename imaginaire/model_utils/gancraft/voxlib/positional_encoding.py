@@ -46,12 +46,12 @@ def positional_encoding_pt(pts, pe_degrees, dim=-1, incl_orig=False):
     import numpy as np
     pe_stor = []
     for i in range(pe_degrees):
-        pe_stor.append(torch.sin(pts * np.pi * 2 ** i))
-        pe_stor.append(torch.cos(pts * np.pi * 2 ** i))
+        pe_stor.extend(
+            (torch.sin(pts * np.pi * 2**i), torch.cos(pts * np.pi * 2**i))
+        )
     if incl_orig:
         pe_stor.append(pts)
-    pe = torch.cat(pe_stor, dim=dim)
-    return pe
+    return torch.cat(pe_stor, dim=dim)
 
 
 if __name__ == '__main__':

@@ -56,7 +56,7 @@ def calc_height_map(voxel_t):
     heightmap[m == 0] = 0  # Special case when the whole vertical column is empty
 
     elapsed_time = time.time() - start_time
-    print("[GANcraft-utils] Heightmap time: {}".format(elapsed_time))
+    print(f"[GANcraft-utils] Heightmap time: {elapsed_time}")
     return heightmap
 
 
@@ -165,9 +165,7 @@ def volum_rendering_relu(sigma, dists, dim=2):
 
     a = 1 - torch.exp(-free_energy.float())  # probability of it is not empty here
     b = torch.exp(-cumsum_exclusive(free_energy, dim=dim))  # probability of everything is empty up to now
-    probs = a * b  # probability of the ray hits something here
-
-    return probs
+    return a * b
 
 
 class McVoxel(nn.Module):
@@ -215,7 +213,9 @@ class McVoxel(nn.Module):
 
         # Generate 3D position to 1D feature LUT table
         nfilledvox = torch.sum(self.corner_t > 0)
-        print('[GANcraft-utils] Number of filled voxels: {} / {}'.format(nfilledvox.item(), torch.numel(self.corner_t)))
+        print(
+            f'[GANcraft-utils] Number of filled voxels: {nfilledvox.item()} / {torch.numel(self.corner_t)}'
+        )
         # Zero means non-existent voxel.
         self.corner_t[self.corner_t > 0] = torch.arange(start=1, end=nfilledvox+1, step=1, dtype=torch.int32)
         self.nfilledvox = nfilledvox
@@ -229,7 +229,9 @@ class McVoxel(nn.Module):
         sky_level = self.heightmap.max() + 1
         self.voxel_t = self.voxel_t[gnd_level:sky_level, :, :]
         self.trans_mat[0, 3] += gnd_level
-        print('[GANcraft-utils] Voxel truncated. Gnd: {}; Sky: {}.'.format(gnd_level.item(), sky_level.item()))
+        print(
+            f'[GANcraft-utils] Voxel truncated. Gnd: {gnd_level.item()}; Sky: {sky_level.item()}.'
+        )
 
     def is_sea(self, loc):
         r"""loc: [2]: x, z."""
@@ -269,62 +271,46 @@ class MCLabelTranslator:
         glbl2cocoidx_lut = {}
         with open(os.path.join(this_path, 'gaugan_lbl2col.csv'), newline='') as csvfile:
             csvreader = csv.reader(csvfile, delimiter=',')
-            cocoidx = 1  # 0 is "Others"
-            for row in csvreader:
+            for cocoidx, row in enumerate(csvreader, start=1):
                 color = int(row[1].lstrip('#'), 16)
                 glbl2color_lut[row[0]] = color
                 glbl2cocoidx_lut[row[0]] = cocoidx
-                cocoidx += 1
-
-        # Generate id2ggcolor lut
-        id2ggcolor_lut = {}
-        for k, v in id2glbl_lut.items():
-            if v:
-                id2ggcolor_lut[k] = glbl2color_lut[v]
-            else:
-                id2ggcolor_lut[k] = 0
-
-        # Generate id2cocoidx
-        id2cocoidx_lut = {}
-        for k, v in id2glbl_lut.items():
-            if v:
-                id2cocoidx_lut[k] = glbl2cocoidx_lut[v]
-            else:
-                id2cocoidx_lut[k] = 0
-
+        id2ggcolor_lut = {
+            k: glbl2color_lut[v] if v else 0 for k, v in id2glbl_lut.items()
+        }
+        id2cocoidx_lut = {
+            k: glbl2cocoidx_lut[v] if v else 0 for k, v in id2glbl_lut.items()
+        }
         self.id2color_lut = id2color_lut
         self.id2name_lut = id2name_lut
         self.id2glbl_lut = id2glbl_lut
         self.id2ggcolor_lut = id2ggcolor_lut
         self.id2cocoidx_lut = id2cocoidx_lut
 
-        if True:
-            mapper = ReducedLabelMapper()
-            mcid2rdid_lut = mapper.mcid2rdid_lut
-            mcid2rdid_lut = torch.tensor(mcid2rdid_lut, dtype=torch.long)
-            self.mcid2rdid_lut = mcid2rdid_lut
-            self.num_reduced_lbls = len(mapper.reduced_lbls)
-            self.ignore_id = mapper.ignore_id
-            self.dirt_id = mapper.dirt_id
-            self.water_id = mapper.water_id
+        mapper = ReducedLabelMapper()
+        mcid2rdid_lut = mapper.mcid2rdid_lut
+        mcid2rdid_lut = torch.tensor(mcid2rdid_lut, dtype=torch.long)
+        self.mcid2rdid_lut = mcid2rdid_lut
+        self.num_reduced_lbls = len(mapper.reduced_lbls)
+        self.ignore_id = mapper.ignore_id
+        self.dirt_id = mapper.dirt_id
+        self.water_id = mapper.water_id
 
-            self.mapper = mapper
+        self.mapper = mapper
 
-            ggid2rdid_lut = mapper.ggid2rdid + [0]  # Last index is ignore
-            ggid2rdid_lut = torch.tensor(ggid2rdid_lut, dtype=torch.long)
-            self.ggid2rdid_lut = ggid2rdid_lut
-        if True:
-            mc2coco_lut = list(zip(*sorted([(k, v) for k, v in self.id2cocoidx_lut.items()])))[1]
-            mc2coco_lut = torch.tensor(mc2coco_lut, dtype=torch.long)
-            self.mc2coco_lut = mc2coco_lut
+        ggid2rdid_lut = mapper.ggid2rdid + [0]  # Last index is ignore
+        ggid2rdid_lut = torch.tensor(ggid2rdid_lut, dtype=torch.long)
+        self.ggid2rdid_lut = ggid2rdid_lut
+        mc2coco_lut = list(zip(*sorted(list(self.id2cocoidx_lut.items()))))[1]
+        mc2coco_lut = torch.tensor(mc2coco_lut, dtype=torch.long)
+        self.mc2coco_lut = mc2coco_lut
 
     def gglbl2ggid(self, gglbl):
         return self.mapper.gglbl2ggid[gglbl]
 
     def mc2coco(self, mc):
         self.mc2coco_lut = self.mc2coco_lut.to(mc.device)
-        coco = self.mc2coco_lut[mc.long()]
-        return coco
+        return self.mc2coco_lut[mc.long()]
 
     def mc2reduced(self, mc, ign2dirt=False):
         self.mcid2rdid_lut = self.mcid2rdid_lut.to(mc.device)
@@ -335,8 +321,7 @@ class MCLabelTranslator:
 
     def coco2reduced(self, coco):
         self.ggid2rdid_lut = self.ggid2rdid_lut.to(coco.device)
-        reduced = self.ggid2rdid_lut[coco.long()]
-        return reduced
+        return self.ggid2rdid_lut[coco.long()]
 
     def get_num_reduced_lbls(self):
         return self.num_reduced_lbls
@@ -344,8 +329,7 @@ class MCLabelTranslator:
     @staticmethod
     def uint32_to_4uint8(x):
         dt1 = np.dtype(('i4', [('bytes', 'u1', 4)]))
-        color = x.view(dtype=dt1)['bytes']
-        return color
+        return x.view(dtype=dt1)['bytes']
 
     def mc_color(self, img):
         r"""Obtaining Minecraft default color.
@@ -354,12 +338,10 @@ class MCLabelTranslator:
             img (H x W x 1 int32 numpy tensor): Segmentation map.
         """
         lut = self.id2color_lut
-        lut = list(zip(*sorted([(k, v) for k, v in lut.items()])))[1]
+        lut = list(zip(*sorted(list(lut.items()))))[1]
         lut = np.array(lut, dtype=np.uint32)
         rgb = lut[img]
-        rgb = self.uint32_to_4uint8(rgb)[..., :3]
-
-        return rgb
+        return self.uint32_to_4uint8(rgb)[..., :3]
 
 
 def rand_crop(cam_c, cam_res, target_res):
@@ -384,5 +366,4 @@ def colormap(x, cmap='viridis'):
     x = np.nan_to_num(x, np.nan, np.nan, np.nan)
     x = x - np.nanmin(x)
     x = x / np.nanmax(x)
-    rgb = plt.get_cmap(cmap)(x)[..., :3]
-    return rgb
+    return plt.get_cmap(cmap)(x)[..., :3]

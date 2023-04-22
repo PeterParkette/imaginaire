@@ -177,7 +177,6 @@ class EvalCameraController:
 
                 self.camera_poses.append((cam_ori, cam_dir, cam_up, cam_f))
 
-        # look outward
         elif pattern == 5:
             move = torch.linspace(1.0, 0.5, steps=maxstep)
             height_history = []
@@ -210,7 +209,6 @@ class EvalCameraController:
                 cam_f = 0.5/np.tan(np.deg2rad(cam_ang/2))  # about 24mm fov
 
                 self.camera_poses.append((cam_ori, cam_dir, cam_up, cam_f))
-        # Rise
         elif pattern == 6:
             shift = 0
             lift = torch.linspace(0.0, 200.0, steps=maxstep)
@@ -233,11 +231,10 @@ class EvalCameraController:
                 cam_f = 0.5/np.tan(np.deg2rad(73/2)*zoom[i])  # about 24mm fov
 
                 self.camera_poses.append((cam_ori, cam_dir, cam_up, cam_f))
-        # 45deg
         elif pattern == 7:
             rad = torch.tensor([np.deg2rad(45).astype(np.float32)])
             size = 1536
-            for i in range(maxstep):
+            for _ in range(maxstep):
                 farpoint = torch.tensor([
                     61+size,
                     torch.sin(rad)*size + voxel.voxel_t.size(1)/2,
@@ -274,14 +271,12 @@ class EvalCameraController:
         prev_height = height_history[0]
         for i in range(maxstep):
             prev_height = prev_height - decay
-            if prev_height < height_history[i]:
-                prev_height = height_history[i]
+            prev_height = max(prev_height, height_history[i])
             height_history2.append(prev_height)
         prev_height = height_history[-1]
         for i in range(maxstep-1, -1, -1):
             prev_height = prev_height - decay
-            if prev_height < height_history[i]:
-                prev_height = height_history[i]
+            prev_height = max(prev_height, height_history[i])
             height_history2[i] = max(prev_height, height_history2[i])
         return height_history2
 

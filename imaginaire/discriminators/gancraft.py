@@ -91,7 +91,7 @@ class Discriminator(nn.Module):
               - fake_features (list): list of lists of features produced by
                 individual patch discriminators for fake images.
         """
-        output_x = dict()
+        output_x = {}
 
         # Fake.
         fake_images = net_G_output['fake_images']
@@ -102,7 +102,7 @@ class Discriminator(nn.Module):
                 2), fake_images.size(3)], device=fake_images.device, dtype=fake_images.dtype)
             fake_labels[:, 1, :, :] = 1
         output_x['fake_outputs'], output_x['fake_features'] = \
-            self._single_forward(fake_labels, fake_images, None)
+                self._single_forward(fake_labels, fake_images, None)
 
         # Real.
         if incl_real:
@@ -114,7 +114,7 @@ class Discriminator(nn.Module):
                     2), real_images.size(3)], device=real_images.device, dtype=real_images.dtype)
                 real_labels[:, 1, :, :] = 1
             output_x['real_outputs'], output_x['real_features'] = \
-                self._single_forward(real_labels, real_images, None)
+                    self._single_forward(real_labels, real_images, None)
 
         # pseudo-Real.
         if incl_pseudo_real:
@@ -125,7 +125,7 @@ class Discriminator(nn.Module):
                     2), preal_images.size(3)], device=preal_images.device, dtype=preal_images.dtype)
                 preal_labels[:, 1, :, :] = 1
             output_x['pseudo_real_outputs'], output_x['pseudo_real_features'] = \
-                self._single_forward(preal_labels, preal_images, None)
+                    self._single_forward(preal_labels, preal_images, None)
 
         return output_x
 
@@ -245,15 +245,13 @@ class FPSEDiscriminator(nn.Module):
         # final prediction layers
         feat32 = self.final2(feat22)
 
-        results = []
         label_map = self.interpolator(segmaps, size=feat32.size()[2:])
         pred2 = self.output(feat32)  # N, num_labels+1, H//4, W//4
 
         features = [feat11, feat12, feat13, feat14, feat15, feat25, feat24, feat23, feat22]
         if weights is not None:
             label_map = label_map * weights[..., None, None]
-        results.append({'pred': pred2, 'label': label_map})
-
+        results = [{'pred': pred2, 'label': label_map}]
         if self.do_multiscale:
             feat33 = self.final3(feat23)
             pred3 = self.output3(feat33)
@@ -272,7 +270,10 @@ class FPSEDiscriminator(nn.Module):
                 label_map3 = label_map3 * weights[..., None, None]
                 label_map4 = label_map4 * weights[..., None, None]
 
-            results.append({'pred': pred3, 'label': label_map3})
-            results.append({'pred': pred4, 'label': label_map4})
-
+            results.extend(
+                (
+                    {'pred': pred3, 'label': label_map3},
+                    {'pred': pred4, 'label': label_map4},
+                )
+            )
         return results, features

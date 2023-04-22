@@ -71,16 +71,16 @@ class Dataset(BaseDataset):
         mapping = []
         for lmdb_idx, sequence_list in enumerate(self.sequence_lists):
             for sequence_name, filenames in sequence_list.items():
-                for filename in filenames:
-                    # This file is corrupt.
-                    if filename == 'z-KziTO_5so_0019_start0_end85_h596_w596':
-                        continue
-                    mapping.append({
+                mapping.extend(
+                    {
                         'lmdb_root': self.lmdb_roots[lmdb_idx],
                         'lmdb_idx': lmdb_idx,
                         'sequence_name': sequence_name,
                         'filenames': [filename],
-                    })
+                    }
+                    for filename in filenames
+                    if filename != 'z-KziTO_5so_0019_start0_end85_h596_w596'
+                )
         self.mapping = mapping
         self.epoch_length = len(mapping)
 
@@ -116,10 +116,7 @@ class Dataset(BaseDataset):
             keys (list): List of full keys.
         """
         assert isinstance(filenames, list), 'Filenames should be a list.'
-        keys = []
-        for filename in filenames:
-            keys.append('%s/%s' % (sequence_name, filename))
-        return keys
+        return [f'{sequence_name}/{filename}' for filename in filenames]
 
     def _getitem(self, index):
         r"""Gets selected files.

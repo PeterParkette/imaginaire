@@ -73,8 +73,7 @@ def get_kth_value(unsorted, k, dim=-1):
     """
     indices = torch.topk(unsorted, k, dim=dim, largest=False)[1]
     k_smallests = torch.gather(unsorted, dim=dim, index=indices)
-    kth_values = k_smallests.max(dim=dim)[0]
-    return kth_values
+    return k_smallests.max(dim=dim)[0]
 
 
 def _get_prdc(real_features, fake_features, nearest_k):

@@ -34,7 +34,7 @@ def get_segmentation_hist_model(dataset_name, aws_credentials=None):
                 download_file_from_google_drive("1o1m-eT38zNCIFldcRaoWcLvvBtY8S4W3", model_path)
         state_dict = torch.load(model_path, map_location='cpu')
         seg_network.load_state_dict(state_dict)
-    elif dataset_name == "cocostuff" or dataset_name == "getty":
+    elif dataset_name in ["cocostuff", "getty"]:
         from imaginaire.evaluation.segmentation.cocostuff import DeepLabV2
         seg_network = DeepLabV2()
     else:
@@ -80,8 +80,7 @@ def compute_hist(pred, gt, n_classes, use_dont_care):
         hist = torch.bincount(merge, minlength=n_classes ** 2)
         hist = hist.view((n_classes, n_classes))
         all_hist.append(hist)
-    all_hist = torch.stack(all_hist)
-    return all_hist
+    return torch.stack(all_hist)
 
 
 def get_miou(hist, eps=1e-8):

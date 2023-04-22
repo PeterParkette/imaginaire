@@ -79,8 +79,7 @@ class Unet(nn.Module):
         up2 = self.up_concat2(conv2, up3)
         up1 = self.up_concat1(conv1, up2)
         probs = self.final(up1)
-        pred = torch.argmax(probs, dim=1)
-        return pred
+        return torch.argmax(probs, dim=1)
 
 
 class unetConv2(nn.Module):

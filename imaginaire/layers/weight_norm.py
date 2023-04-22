@@ -79,15 +79,12 @@ class ScaledLR(object):
         self.bias_name = bias_name
 
     def compute_weight(self, module):
-        weight = getattr(module, self.weight_name + '_ori')
+        weight = getattr(module, f'{self.weight_name}_ori')
         return weight * module.weight_scale
 
     def compute_bias(self, module):
-        bias = getattr(module, self.bias_name + '_ori')
-        if bias is not None:
-            return bias * module.bias_scale
-        else:
-            return None
+        bias = getattr(module, f'{self.bias_name}_ori')
+        return bias * module.bias_scale if bias is not None else None
 
     @staticmethod
     def apply(module, weight_name, bias_name, lr_mul, equalized):
@@ -100,24 +97,24 @@ class ScaledLR(object):
             # module.bias is a parameter (can be None).
             bias = getattr(module, bias_name)
             delattr(module, bias_name)
-            module.register_parameter(bias_name + '_ori', bias)
+            module.register_parameter(f'{bias_name}_ori', bias)
         else:
             # module.bias does not exist.
             bias = None
-            setattr(module, bias_name + '_ori', bias)
+            setattr(module, f'{bias_name}_ori', bias)
         if bias is not None:
             setattr(module, bias_name, bias.data)
         else:
             setattr(module, bias_name, None)
         module.register_buffer('bias_scale', torch.tensor(lr_mul))
 
-        if hasattr(module, weight_name + '_orig'):
+        if hasattr(module, f'{weight_name}_orig'):
             # The module has been wrapped with spectral normalization.
             # We only want to keep a single weight parameter.
-            weight = getattr(module, weight_name + '_orig')
-            delattr(module, weight_name + '_orig')
-            module.register_parameter(weight_name + '_ori', weight)
-            setattr(module, weight_name + '_orig', weight.data)
+            weight = getattr(module, f'{weight_name}_orig')
+            delattr(module, f'{weight_name}_orig')
+            module.register_parameter(f'{weight_name}_ori', weight)
+            setattr(module, f'{weight_name}_orig', weight.data)
             # Put this hook before the spectral norm hook.
             module._forward_pre_hooks = collections.OrderedDict(
                 reversed(list(module._forward_pre_hooks.items()))
@@ -126,7 +123,7 @@ class ScaledLR(object):
         else:
             weight = getattr(module, weight_name)
             delattr(module, weight_name)
-            module.register_parameter(weight_name + '_ori', weight)
+            module.register_parameter(f'{weight_name}_ori', weight)
             setattr(module, weight_name, weight.data)
             module.use_sn = False
 
@@ -149,10 +146,10 @@ class ScaledLR(object):
     def remove(self, module):
         with torch.no_grad():
             weight = self.compute_weight(module)
-        delattr(module, self.weight_name + '_ori')
+        delattr(module, f'{self.weight_name}_ori')
 
         if module.use_sn:
-            setattr(module, self.weight_name + '_orig', weight.detach())
+            setattr(module, f'{self.weight_name}_orig', weight.detach())
         else:
             delattr(module, self.weight_name)
             module.register_parameter(self.weight_name,
@@ -161,7 +158,7 @@ class ScaledLR(object):
         with torch.no_grad():
             bias = self.compute_bias(module)
         delattr(module, self.bias_name)
-        delattr(module, self.bias_name + '_ori')
+        delattr(module, f'{self.bias_name}_ori')
         if bias is not None:
             module.register_parameter(self.bias_name,
                                       torch.nn.Parameter(bias.detach()))
@@ -177,7 +174,7 @@ class ScaledLR(object):
             # The following spectral norm hook will compute the SN of
             # "module.weight_orig" and store the normalized weight in
             # "module.weight".
-            setattr(module, self.weight_name + '_orig', weight)
+            setattr(module, f'{self.weight_name}_orig', weight)
         else:
             setattr(module, self.weight_name, weight)
         bias = self.compute_bias(module)
@@ -188,7 +185,7 @@ def remove_weight_norms(module, weight_name='weight', bias_name='bias'):
     if hasattr(module, 'weight_ori') or hasattr(module, 'weight_orig'):
         for k in list(module._forward_pre_hooks.keys()):
             hook = module._forward_pre_hooks[k]
-            if (isinstance(hook, ScaledLR) or isinstance(hook, SpectralNorm)):
+            if isinstance(hook, (ScaledLR, SpectralNorm)):
                 hook.remove(module)
                 del module._forward_pre_hooks[k]
 
@@ -238,7 +235,7 @@ def get_weight_norm_layer(norm_type, **norm_params):
         norm_params: Arbitrary keyword arguments that will be used to
             initialize the weight normalization.
     """
-    if norm_type == 'none' or norm_type == '':  # no normalization
+    if norm_type in ['none', '']:  # no normalization
         return lambda x: x
     elif norm_type == 'spectral':  # spectral normalization
         return functools.partial(spectral_norm, **norm_params)
@@ -263,5 +260,4 @@ def get_weight_norm_layer(norm_type, **norm_params):
             functools.partial(spectral_norm, **norm_params)(x)
         )
     else:
-        raise ValueError(
-            'Weight norm layer %s is not recognized' % norm_type)
+        raise ValueError(f'Weight norm layer {norm_type} is not recognized')

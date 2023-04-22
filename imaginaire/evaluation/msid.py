@@ -87,9 +87,7 @@ def msid_descriptor(x, ts=np.logspace(-1, 1, 256), k=5, m=10, niters=100,
     nx = Lx.shape[0]
     msidx = slq_red_var(Lx, m, niters, ts, rademacher)
 
-    normed_msidx = _normalize_msid(msidx, normalize, nx, k, ts) * NORMALIZATION
-
-    return normed_msidx
+    return _normalize_msid(msidx, normalize, nx, k, ts) * NORMALIZATION
 
 
 def _build_graph(data, k=5, graph_builder='full', normalized=True):
@@ -114,8 +112,7 @@ def _build_graph(data, k=5, graph_builder='full', normalized=True):
         raise Exception('Please specify graph builder: sparse or kgraph.')
     A = (A + A.T) / 2
     A.data = np.ones(A.data.shape)
-    L = _laplacian_sparse(A, normalized)
-    return L
+    return _laplacian_sparse(A, normalized)
 
 
 def _normalize_msid(msid, normalization, n, k, ts):
@@ -129,9 +126,7 @@ def _normalize_msid(msid, normalization, n, k, ts):
         er_spectrum = 4 / np.sqrt(k) * xs + 1 - 2 / np.sqrt(k)
         er_msid = np.exp(-np.outer(ts, er_spectrum)).sum(-1)
         normed_msid = normed_msid / (er_msid + EPSILON)
-    elif normalization == 'none' or normalization is None:
-        pass
-    else:
+    elif normalization != 'none' and normalization is not None:
         raise ValueError('Unknown normalization parameter!')
     return normed_msid
 
@@ -239,8 +234,7 @@ def _slq(A, m, niters, rademacher):
     eigvals, eigvecs = np.linalg.eigh(T)
     expeig = np.exp(eigvals)
     sqeigv1 = np.power(eigvecs[:, 0, :], 2)
-    trace = A.shape[-1] * (expeig * sqeigv1).sum() / niters
-    return trace
+    return A.shape[-1] * (expeig * sqeigv1).sum() / niters
 
 
 def _slq_ts(A, m, niters, ts, rademacher):
@@ -262,8 +256,7 @@ def _slq_ts(A, m, niters, ts, rademacher):
     eigvals, eigvecs = np.linalg.eigh(T)
     expeig = np.exp(-np.outer(ts, eigvals)).reshape(ts.shape[0], niters, m)
     sqeigv1 = np.power(eigvecs[:, 0, :], 2)
-    traces = A.shape[-1] * (expeig * sqeigv1).sum(-1).mean(-1)
-    return traces
+    return A.shape[-1] * (expeig * sqeigv1).sum(-1).mean(-1)
 
 
 def _slq_ts_fs(A, m, niters, ts, rademacher, fs):
@@ -367,9 +360,7 @@ def construct_graph(input_features, k, num_splits=10):
 
 def _laplacian_sparse(A, normalized=True):
     D = A.sum(1).A1
-    if normalized:
-        Dsqrt = diags(1 / np.sqrt(D))
-        L = eye(A.shape[0]) - Dsqrt.dot(A).dot(Dsqrt)
-    else:
-        L = diags(D) - A
-    return L
+    if not normalized:
+        return diags(D) - A
+    Dsqrt = diags(1 / np.sqrt(D))
+    return eye(A.shape[0]) - Dsqrt.dot(A).dot(Dsqrt)

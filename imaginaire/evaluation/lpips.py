@@ -40,8 +40,7 @@ class NetLinLayer(nn.Module):
         self.weight = nn.Parameter(torch.zeros(1, dim, 1, 1))
 
     def forward(self, inp):
-        out = self.weight * inp
-        return out
+        return self.weight * inp
 
 
 class ScalingLayer(nn.Module):
@@ -94,13 +93,10 @@ class LPNet(nn.Module):
         in0 = 2 * in0 - 1
         in0_input = self.scaling_layer(in0)
         outs0 = self.net.forward(in0_input)
-        feats0 = {}
         shapes = []
         res = []
 
-        for kk in range(self.L):
-            feats0[kk] = normalize_tensor(outs0[kk])
-
+        feats0 = {kk: normalize_tensor(outs0[kk]) for kk in range(self.L)}
         if avg:
             res = [self.lins[kk](feats0[kk]).mean([2, 3], keepdim=False) for kk in range(self.L)]
         else:
@@ -148,6 +144,4 @@ class vgg16(torch.nn.Module):
         h = self.slice5(h)
         h_relu5_3 = h
         vgg_outputs = namedtuple("VggOutputs", ['relu1_2', 'relu2_2', 'relu3_3', 'relu4_3', 'relu5_3'])
-        out = vgg_outputs(h_relu1_2, h_relu2_2, h_relu3_3, h_relu4_3, h_relu5_3)
-
-        return out
+        return vgg_outputs(h_relu1_2, h_relu2_2, h_relu3_3, h_relu4_3, h_relu5_3)

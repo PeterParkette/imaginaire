@@ -85,22 +85,22 @@ class BaseTrainer(object):
 
         # Initialize data augmentation policy.
         self.aug_policy = cfg.trainer.aug_policy
-        print("Augmentation policy: {}".format(self.aug_policy))
+        print(f"Augmentation policy: {self.aug_policy}")
 
         # Initialize loss functions.
         # All loss names have weights. Some have criterion modules.
         # Mapping from loss names to criterion modules.
         self.criteria = torch.nn.ModuleDict()
         # Mapping from loss names to loss weights.
-        self.weights = dict()
-        self.losses = dict(gen_update=dict(), dis_update=dict())
+        self.weights = {}
+        self.losses = dict(gen_update={}, dis_update={})
         self.gen_losses = self.losses['gen_update']
         self.dis_losses = self.losses['dis_update']
         self._init_loss(cfg)
         for loss_name, loss_weight in self.weights.items():
             print("Loss {:<20} Weight {}".format(loss_name, loss_weight))
             if loss_name in self.criteria.keys() and \
-                    self.criteria[loss_name] is not None:
+                        self.criteria[loss_name] is not None:
                 self.criteria[loss_name].to('cuda')
 
         if self.is_inference:
@@ -196,10 +196,10 @@ class BaseTrainer(object):
         r"""Write all loss values to tensorboard."""
         for update, losses in self.losses.items():
             # update is 'gen_update' or 'dis_update'.
-            assert update == 'gen_update' or update == 'dis_update'
+            assert update in ['gen_update', 'dis_update']
             for loss_name, loss in losses.items():
                 if loss is not None:
-                    full_loss_name = update + '/' + loss_name
+                    full_loss_name = f'{update}/{loss_name}'
                     if full_loss_name not in self.meters.keys():
                         # Create a new meter if it doesn't exist.
                         self.meters[full_loss_name] = Meter(
@@ -302,7 +302,7 @@ class BaseTrainer(object):
                             self.sch_D.last_epoch = current_iteration
                         else:
                             self.sch_D.last_epoch = current_epoch
-                    print('Load from: {}'.format(checkpoint_path))
+                    print(f'Load from: {checkpoint_path}')
                 else:
                     print('Load network weights only.')
         else:
@@ -315,12 +315,11 @@ class BaseTrainer(object):
                     net_G_module = self.net_G.module.module
                 else:
                     net_G_module = self.net_G.module
-                if hasattr(net_G_module, 'load_pretrained_network'):
-                    net_G_module.load_pretrained_network(self.net_G, checkpoint['net_G'])
-                    print('Load generator weights only.')
-                else:
+                if not hasattr(net_G_module, 'load_pretrained_network'):
                     raise ValueError('Checkpoint cannot be loaded.')
 
+                net_G_module.load_pretrained_network(self.net_G, checkpoint['net_G'])
+                print('Load generator weights only.')
         print('Done with loading the checkpoint.')
         return resume, current_epoch, current_iteration
 
@@ -421,9 +420,11 @@ class BaseTrainer(object):
         self._end_of_iteration(data, current_epoch, current_iteration)
 
         # Save everything to the checkpoint.
-        if current_iteration % self.cfg.snapshot_save_iter == 0:
-            if current_iteration >= self.cfg.snapshot_save_start_iter:
-                self.save_checkpoint(current_epoch, current_iteration)
+        if (
+            current_iteration % self.cfg.snapshot_save_iter == 0
+            and current_iteration >= self.cfg.snapshot_save_start_iter
+        ):
+            self.save_checkpoint(current_epoch, current_iteration)
 
         # Compute metrics.
         if current_iteration % self.cfg.metrics_iter == 0:
@@ -475,9 +476,11 @@ class BaseTrainer(object):
         self._end_of_epoch(data, current_epoch, current_iteration)
 
         # Save everything to the checkpoint.
-        if current_iteration % self.cfg.snapshot_save_iter == 0:
-            if current_epoch >= self.cfg.snapshot_save_start_epoch:
-                self.save_checkpoint(current_epoch, current_iteration)
+        if (
+            current_iteration % self.cfg.snapshot_save_iter == 0
+            and current_epoch >= self.cfg.snapshot_save_start_epoch
+        ):
+            self.save_checkpoint(current_epoch, current_iteration)
 
         # Compute metrics.
         if current_iteration % self.cfg.metrics_iter == 0:
@@ -503,12 +506,9 @@ class BaseTrainer(object):
         """
         if not self.cfg.trainer.model_average_config.enabled:
             return
-        if averaged:
-            net_G = self.net_G.module.averaged_model
-        else:
-            net_G = self.net_G_module
+        net_G = self.net_G.module.averaged_model if averaged else self.net_G_module
         model_average_iteration = \
-            self.cfg.trainer.model_average_config.num_batch_norm_estimation_iterations
+                self.cfg.trainer.model_average_config.num_batch_norm_estimation_iterations
         if model_average_iteration == 0:
             return
         with torch.no_grad():
@@ -518,8 +518,9 @@ class BaseTrainer(object):
             net_G.apply(reset_batch_norm)
             for cal_it, cal_data in enumerate(data_loader):
                 if cal_it >= model_average_iteration:
-                    print('Done with {} iterations of updating batch norm '
-                          'statistics'.format(model_average_iteration))
+                    print(
+                        f'Done with {model_average_iteration} iterations of updating batch norm statistics'
+                    )
                     break
                 cal_data = to_device(cal_data, 'cuda')
                 cal_data = self.pre_process(cal_data)
@@ -540,7 +541,7 @@ class BaseTrainer(object):
             vis_images = torch.cat(
                 [img for img in vis_images if img is not None], dim=3).float()
             vis_images = (vis_images + 1) / 2
-            print('Save output images to {}'.format(path))
+            print(f'Save output images to {path}')
             vis_images.clamp_(0, 1)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             image_grid = torchvision.utils.make_grid(
@@ -597,25 +598,24 @@ class BaseTrainer(object):
                 a: list of tensors or tensor
                 b: list of tensors or tensor
             """
-            out = list()
+            out = []
             for x, y in zip(a, b):
-                if isinstance(x, list):
-                    res = _get_difference(x, y)
-                else:
-                    res = x - y
+                res = _get_difference(x, y) if isinstance(x, list) else x - y
                 out.append(res)
             return out
 
         if real:
-            if self.cfg.trainer.gan_relativistic:
-                return _get_difference(net_D_output['real_outputs'], net_D_output['fake_outputs'])
-            else:
-                return net_D_output['real_outputs']
+            return (
+                _get_difference(
+                    net_D_output['real_outputs'], net_D_output['fake_outputs']
+                )
+                if self.cfg.trainer.gan_relativistic
+                else net_D_output['real_outputs']
+            )
+        if self.cfg.trainer.gan_relativistic:
+            return _get_difference(net_D_output['fake_outputs'], net_D_output['real_outputs'])
         else:
-            if self.cfg.trainer.gan_relativistic:
-                return _get_difference(net_D_output['fake_outputs'], net_D_output['real_outputs'])
-            else:
-                return net_D_output['fake_outputs']
+            return net_D_output['fake_outputs']
 
     def _start_of_epoch(self, current_epoch):
         r"""Operations to do before starting an epoch.
@@ -705,20 +705,16 @@ class BaseTrainer(object):
                     self.cfg.gen_opt.clip_grad_norm
                 )
                 self.gen_grad_norm = total_norm
-                if torch.isfinite(total_norm) and \
-                        total_norm > self.cfg.gen_opt.clip_grad_norm:
-                    # print(f"Gradient norm of the generator ({total_norm}) "
-                    #       f"too large.")
-                    if getattr(self.cfg.gen_opt, 'skip_grad', False):
-                        print(f"Skip gradient update.")
-                        self.opt_G.zero_grad(set_to_none=True)
-                        self.scaler_G.step(self.opt_G)
-                        self.scaler_G.update()
-                        break
-                    # else:
-                    #     print(f"Clip gradient norm to "
-                    #           f"{self.cfg.gen_opt.clip_grad_norm}.")
-
+                if (
+                    torch.isfinite(total_norm)
+                    and total_norm > self.cfg.gen_opt.clip_grad_norm
+                    and getattr(self.cfg.gen_opt, 'skip_grad', False)
+                ):
+                    print("Skip gradient update.")
+                    self.opt_G.zero_grad(set_to_none=True)
+                    self.scaler_G.step(self.opt_G)
+                    self.scaler_G.update()
+                    break
             # Perform an optimizer step.
             self._time_before_step()
             self.scaler_G.step(self.opt_G)
@@ -782,11 +778,11 @@ class BaseTrainer(object):
                 )
                 self.dis_grad_norm = total_norm
                 if torch.isfinite(total_norm) and \
-                        total_norm > self.cfg.dis_opt.clip_grad_norm:
+                            total_norm > self.cfg.dis_opt.clip_grad_norm:
                     print(f"Gradient norm of the discriminator ({total_norm}) "
                           f"too large.")
                     if getattr(self.cfg.dis_opt, 'skip_grad', False):
-                        print(f"Skip gradient update.")
+                        print("Skip gradient update.")
                         self.opt_D.zero_grad(set_to_none=True)
                         self.scaler_D.step(self.opt_D)
                         self.scaler_D.update()
@@ -837,13 +833,13 @@ class BaseTrainer(object):
         net_G.eval()
 
         print('# of samples %d' % len(data_loader))
-        for it, data in enumerate(tqdm(data_loader)):
+        for data in tqdm(data_loader):
             data = self.start_of_iteration(data, current_iteration=-1)
             with torch.no_grad():
                 output_images, file_names = \
-                    net_G.inference(data, **vars(inference_args))
+                        net_G.inference(data, **vars(inference_args))
             for output_image, file_name in zip(output_images, file_names):
-                fullname = os.path.join(output_dir, file_name + '.jpg')
+                fullname = os.path.join(output_dir, f'{file_name}.jpg')
                 output_image = tensor2pilimage(output_image.clamp_(-1, 1),
                                                minus1to1_normalized=True)
                 save_pilimage_in_jpeg(fullname, output_image)
@@ -977,6 +973,6 @@ def _save_checkpoint(cfg,
     )
     fn = os.path.join(cfg.logdir, 'latest_checkpoint.txt')
     with open(fn, 'wt') as f:
-        f.write('latest_checkpoint: %s' % latest_checkpoint_path)
-    print('Save checkpoint to {}'.format(save_path))
+        f.write(f'latest_checkpoint: {latest_checkpoint_path}')
+    print(f'Save checkpoint to {save_path}')
     return save_path

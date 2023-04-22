@@ -43,8 +43,7 @@ def parse_args():
     parser.add_argument('--wandb_id', type=str)
     parser.add_argument('--resume', type=int)
     parser.add_argument('--num_workers', type=int)
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():
@@ -99,14 +98,13 @@ def main():
     if is_master():
         if args.wandb_id is not None:
             wandb_id = args.wandb_id
+        elif resumed and os.path.exists(os.path.join(cfg.logdir, 'wandb_id.txt')):
+            with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'r+') as f:
+                wandb_id = f.read()
         else:
-            if resumed and os.path.exists(os.path.join(cfg.logdir, 'wandb_id.txt')):
-                with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'r+') as f:
-                    wandb_id = f.read()
-            else:
-                wandb_id = wandb.util.generate_id()
-                with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'w+') as f:
-                    f.write(wandb_id)
+            wandb_id = wandb.util.generate_id()
+            with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'w+') as f:
+                f.write(wandb_id)
         wandb_mode = "disabled" if (args.debug or not args.wandb) else "online"
         wandb.init(id=wandb_id,
                    project=args.wandb_name,
@@ -121,7 +119,7 @@ def main():
 
     # Start training.
     for epoch in range(current_epoch, cfg.max_epoch):
-        print('Epoch {} ...'.format(epoch))
+        print(f'Epoch {epoch} ...')
         if not args.single_gpu:
             train_data_loader.sampler.set_epoch(current_epoch)
         trainer.start_of_epoch(current_epoch)

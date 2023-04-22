@@ -38,8 +38,7 @@ def parse_args():
     parser.add_argument('--wandb_name', default='default', type=str)
     parser.add_argument('--wandb_id', type=str)
     parser.add_argument('--num_workers', type=int)
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def main():
@@ -82,14 +81,13 @@ def main():
     if is_master():
         if args.wandb_id is not None:
             wandb_id = args.wandb_id
+        elif os.path.exists(os.path.join(cfg.logdir, 'wandb_id.txt')):
+            with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'r+') as f:
+                wandb_id = f.read()
         else:
-            if os.path.exists(os.path.join(cfg.logdir, 'wandb_id.txt')):
-                with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'r+') as f:
-                    wandb_id = f.read()
-            else:
-                wandb_id = wandb.util.generate_id()
-                with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'w+') as f:
-                    f.write(wandb_id)
+            wandb_id = wandb.util.generate_id()
+            with open(os.path.join(cfg.logdir, 'wandb_id.txt'), 'w+') as f:
+                f.write(wandb_id)
         wandb_mode = "disabled" if (args.debug or not args.wandb) else "online"
         wandb.init(id=wandb_id,
                    project=args.wandb_name,
@@ -110,7 +108,7 @@ def main():
         trainer.current_iteration = current_iteration
         trainer.write_metrics()
     else:
-        checkpoints = sorted(glob.glob('{}/*.pt'.format(args.checkpoint_logdir)))
+        checkpoints = sorted(glob.glob(f'{args.checkpoint_logdir}/*.pt'))
         for checkpoint in checkpoints:
             # current_iteration = int(os.path.basename(checkpoint).split('_')[3])
             if args.start_iter <= current_iteration <= args.end_iter:

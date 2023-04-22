@@ -103,12 +103,13 @@ class _BaseConvBlock(nn.Module):
             **vars(activation_norm_params))
 
         # Mapping from operation names to layers.
-        mappings = {'C': {'conv': conv_layer},
-                    'N': {'norm': activation_norm_layer},
-                    'A': {'nonlinearity': nonlinearity_layer}}
-        mappings.update({'B': {'blur': blur_layer}})
-        mappings.update({'G': {'noise': noise_layer}})
-
+        mappings = {
+            'C': {'conv': conv_layer},
+            'N': {'norm': activation_norm_layer},
+            'A': {'nonlinearity': nonlinearity_layer},
+            'B': {'blur': blur_layer},
+            'G': {'noise': noise_layer},
+        }
         # All layers in order.
         self.layers = nn.ModuleDict()
         for op in order:
@@ -117,8 +118,8 @@ class _BaseConvBlock(nn.Module):
 
         # Whether this block expects conditional inputs.
         self.conditional = \
-            getattr(conv_layer, 'conditional', False) or \
-            getattr(activation_norm_layer, 'conditional', False)
+                getattr(conv_layer, 'conditional', False) or \
+                getattr(activation_norm_layer, 'conditional', False)
 
         # Scale the output by a learnable scaler parameter.
         if output_scale is not None:
@@ -142,45 +143,44 @@ class _BaseConvBlock(nn.Module):
                 x = layer(x)
             if self.clamp is not None and isinstance(layer, nn.Conv2d):
                 x.clamp_(max=self.clamp)
-            if key == 'conv':
-                if self.output_scale is not None:
-                    x = x * self.output_scale
+            if key == 'conv' and self.output_scale is not None:
+                x = x * self.output_scale
         return x
 
     def _get_conv_layer(self, in_channels, out_channels, kernel_size, stride,
                         padding, dilation, groups, bias, padding_mode,
                         input_dim):
-        # Returns the convolutional layer.
         if input_dim == 0:
-            layer = nn.Linear(in_channels, out_channels, bias)
+            return nn.Linear(in_channels, out_channels, bias)
+        if stride < 1:  # Fractionally-strided convolution.
+            padding_mode = 'zeros'
+            assert padding == 0
+            layer_type = getattr(nn, f'ConvTranspose{input_dim}d')
+            stride = round(1 / stride)
         else:
-            if stride < 1:  # Fractionally-strided convolution.
-                padding_mode = 'zeros'
-                assert padding == 0
-                layer_type = getattr(nn, f'ConvTranspose{input_dim}d')
-                stride = round(1 / stride)
-            else:
-                layer_type = getattr(nn, f'Conv{input_dim}d')
-            layer = layer_type(
-                in_channels, out_channels, kernel_size, stride, padding,
-                dilation=dilation, groups=groups, bias=bias,
-                padding_mode=padding_mode
-            )
-
-        return layer
+            layer_type = getattr(nn, f'Conv{input_dim}d')
+        return layer_type(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+            padding_mode=padding_mode,
+        )
 
     def __repr__(self):
-        main_str = self._get_name() + '('
+        main_str = f'{self._get_name()}('
         child_lines = []
         for name, layer in self.layers.items():
             mod_str = repr(layer)
-            if name == 'conv' and self.weight_norm_type != 'none' and \
-                    self.weight_norm_type != '':
-                mod_str = mod_str[:-1] + \
-                          ', weight_norm={}'.format(self.weight_norm_type) + ')'
-            if name == 'conv' and getattr(layer, 'base_lr_mul', 1) != 1:
-                mod_str = mod_str[:-1] + \
-                          ', lr_mul={}'.format(layer.base_lr_mul) + ')'
+            if name == 'conv':
+                if self.weight_norm_type not in ['none', '']:
+                    mod_str = f'{mod_str[:-1]}, weight_norm={self.weight_norm_type})'
+                if getattr(layer, 'base_lr_mul', 1) != 1:
+                    mod_str = f'{mod_str[:-1]}, lr_mul={layer.base_lr_mul})'
             mod_str = self._addindent(mod_str, 2)
             child_lines.append(mod_str)
         if len(child_lines) == 1:
@@ -200,8 +200,7 @@ class _BaseConvBlock(nn.Module):
         first = s.pop(0)
         s = [(numSpaces * ' ') + line for line in s]
         s = '\n'.join(s)
-        s = first + '\n' + s
-        return s
+        return first + '\n' + s
 
 
 class ModulatedConv2dBlock(_BaseConvBlock):
@@ -231,10 +230,19 @@ class ModulatedConv2dBlock(_BaseConvBlock):
                         padding, dilation, groups, bias, padding_mode,
                         input_dim):
         assert input_dim == 2
-        layer = ModulatedConv2d(
-            in_channels, out_channels, kernel_size, stride, padding,
-            dilation, groups, bias, padding_mode, self.demodulate, self.eps)
-        return layer
+        return ModulatedConv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+            self.demodulate,
+            self.eps,
+        )
 
     def forward(self, x, *cond_inputs, **kw_cond_inputs):
         for layer in self.layers.values():
@@ -252,20 +260,19 @@ class ModulatedConv2dBlock(_BaseConvBlock):
         return x
 
     def __repr__(self):
-        main_str = self._get_name() + '('
+        main_str = f'{self._get_name()}('
         child_lines = []
         for name, layer in self.layers.items():
             mod_str = repr(layer)
             if name == 'conv' and self.weight_norm_type != 'none' and \
-                    self.weight_norm_type != '':
-                mod_str = mod_str[:-1] + \
-                          ', weight_norm={}'.format(self.weight_norm_type) + \
-                          ', demodulate={}'.format(self.demodulate) + ')'
+                        self.weight_norm_type != '':
+                mod_str = (
+                    f'{mod_str[:-1]}, weight_norm={self.weight_norm_type}'
+                    + f', demodulate={self.demodulate}'
+                ) + ')'
             mod_str = self._addindent(mod_str, 2)
             child_lines.append(mod_str)
-        child_lines.append(
-            self._addindent('Modulation(' + repr(self.modulation) + ')', 2)
-        )
+        child_lines.append(self._addindent(f'Modulation({repr(self.modulation)})', 2))
         if len(child_lines) == 1:
             main_str += child_lines[0]
         else:
@@ -327,11 +334,7 @@ class ModulatedConv2d(nn.Module):
             batch * self.out_channels,
             in_channel, self.kernel_size, self.kernel_size
         )
-        if self.bias is not None:
-            bias = self.bias.repeat(batch)
-        else:
-            bias = self.bias
-
+        bias = self.bias.repeat(batch) if self.bias is not None else self.bias
         x = x.view(1, batch * in_channel, height, width)
 
         if self.padding_mode != 'zeros':
@@ -708,7 +711,7 @@ class _BaseHyperConvBlock(_BaseConvBlock):
         if is_hyper_conv:
             weight_norm_type = 'none'
         if is_hyper_norm:
-            activation_norm_type = 'hyper_' + activation_norm_type
+            activation_norm_type = f'hyper_{activation_norm_type}'
         super().__init__(in_channels, out_channels, kernel_size, stride,
                          padding, dilation, groups, bias, padding_mode,
                          weight_norm_type, weight_norm_params,
@@ -721,13 +724,19 @@ class _BaseHyperConvBlock(_BaseConvBlock):
                         input_dim):
         if input_dim == 0:
             raise ValueError('HyperLinearBlock is not supported.')
-        else:
-            name = 'HyperConv' if self.is_hyper_conv else 'nn.Conv'
-            layer_type = eval(name + '%dd' % input_dim)
-            layer = layer_type(
-                in_channels, out_channels, kernel_size, stride, padding,
-                dilation, groups, bias, padding_mode)
-        return layer
+        name = 'HyperConv' if self.is_hyper_conv else 'nn.Conv'
+        layer_type = eval(name + '%dd' % input_dim)
+        return layer_type(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+        )
 
 
 class HyperConv2dBlock(_BaseHyperConvBlock):
@@ -917,11 +926,19 @@ class _BasePartialConvBlock(_BaseConvBlock):
             layer_type = PartialConv3d
         else:
             raise ValueError('Partial conv only supports 2D and 3D conv now.')
-        layer = layer_type(
-            in_channels, out_channels, kernel_size, stride, padding,
-            dilation, groups, bias, padding_mode,
-            multi_channel=self.multi_channel, return_mask=self.return_mask)
-        return layer
+        return layer_type(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+            multi_channel=self.multi_channel,
+            return_mask=self.return_mask,
+        )
 
     def forward(self, x, *cond_inputs, mask_in=None, **kw_cond_inputs):
         r"""
@@ -948,9 +965,7 @@ class _BasePartialConvBlock(_BaseConvBlock):
             else:
                 x = layer(x)
 
-        if mask_out is not None:
-            return x, mask_out
-        return x
+        return (x, mask_out) if mask_out is not None else x
 
 
 class PartialConv2dBlock(_BasePartialConvBlock):
@@ -1298,10 +1313,7 @@ class PartialConv2d(nn.Conv2d):
         else:
             output = torch.mul(raw_out, self.mask_ratio)
 
-        if self.return_mask:
-            return output, self.update_mask
-        else:
-            return output
+        return (output, self.update_mask) if self.return_mask else output
 
 
 class PartialConv3d(nn.Conv3d):
@@ -1361,10 +1373,7 @@ class PartialConv3d(nn.Conv3d):
         else:
             output = torch.mul(raw_out, mask_ratio)
 
-        if self.return_mask:
-            return output, update_mask
-        else:
-            return output
+        return (output, update_mask) if self.return_mask else output
 
 
 class Embedding2d(nn.Embedding):
