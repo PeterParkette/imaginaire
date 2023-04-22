@@ -21,8 +21,8 @@ class WeightedMSELoss(nn.Module):
         Returns:
            (tensor): Loss value.
         """
-        if self.reduction == 'mean':
-            loss = torch.mean(weight * (input - target) ** 2)
-        else:
-            loss = torch.sum(weight * (input - target) ** 2)
-        return loss
+        return (
+            torch.mean(weight * (input - target) ** 2)
+            if self.reduction == 'mean'
+            else torch.sum(weight * (input - target) ** 2)
+        )

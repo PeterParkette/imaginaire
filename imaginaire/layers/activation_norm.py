@@ -65,19 +65,15 @@ class AdaptiveNorm(nn.Module):
                                               activation_norm_type,
                                               input_dim,
                                               **vars(activation_norm_params))
-        if apply_noise:
-            self.noise_layer = ApplyNoise()
-        else:
-            self.noise_layer = None
-
+        self.noise_layer = ApplyNoise() if apply_noise else None
         if projection:
             if separate_projection:
                 self.fc_gamma = \
-                    LinearBlock(cond_dims, num_features,
+                        LinearBlock(cond_dims, num_features,
                                 weight_norm_type=weight_norm_type,
                                 bias=projection_bias)
                 self.fc_beta = \
-                    LinearBlock(cond_dims, num_features,
+                        LinearBlock(cond_dims, num_features,
                                 weight_norm_type=weight_norm_type,
                                 bias=projection_bias)
             else:
@@ -122,11 +118,10 @@ class AdaptiveNorm(nn.Module):
             x = self.norm(x)
         if self.noise_layer is not None:
             x = self.noise_layer(x, noise=noise)
-        if self.add_bias:
-            x = torch.addcmul(beta, x, 1 + gamma)
-            return x
-        else:
+        if not self.add_bias:
             return x * (1 + gamma), beta.squeeze(3).squeeze(2)
+        x = torch.addcmul(beta, x, 1 + gamma)
+        return x
 
 
 class SpatiallyAdaptiveNorm(nn.Module):
@@ -256,10 +251,7 @@ class SpatiallyAdaptiveNorm(nn.Module):
             else:
                 affine_params = self.mlps[i](label_map)
                 gamma, beta = affine_params.chunk(2, dim=1)
-            if self.bias_only:
-                output = output + beta
-            else:
-                output = output * (1 + gamma) + beta
+            output = output + beta if self.bias_only else output * (1 + gamma) + beta
         return output
 
 
@@ -324,10 +316,7 @@ class DualAdaptiveNorm(nn.Module):
             elif cond.dim() == 2:
                 gamma = gamma[:, :, None, None]
                 beta = beta[:, :, None, None]
-            if self.bias_only:
-                output = output + beta
-            else:
-                output = output * (1 + gamma) + beta
+            output = output + beta if self.bias_only else output * (1 + gamma) + beta
         return output
 
 
@@ -373,9 +362,9 @@ class HyperSpatiallyAdaptiveNorm(nn.Module):
                                     padding=padding,
                                     weight_norm_type=weight_norm_type)]
                 mlp = nn.Sequential(*mlp)
+            elif num_filters > 0:
+                raise ValueError('Multi hyper layer not supported yet.')
             else:
-                if num_filters > 0:
-                    raise ValueError('Multi hyper layer not supported yet.')
                 mlp = HyperConv2d(padding=padding)
             self.mlps.append(mlp)
 
@@ -481,10 +470,7 @@ class ScaleNorm(nn.Module):
     def __init__(self, dim=-1, learned_scale=True, eps=1e-5):
         super().__init__()
         # scale = num_features ** 0.5
-        if learned_scale:
-            self.scale = nn.Parameter(torch.tensor(1.))
-        else:
-            self.scale = 1.
+        self.scale = nn.Parameter(torch.tensor(1.)) if learned_scale else 1.
         # self.num_features = num_features
         self.dim = dim
         self.eps = eps
@@ -532,10 +518,7 @@ class ScaleNorm(nn.Module):
     def __init__(self, dim=-1, learned_scale=True, eps=1e-5):
         super().__init__()
         # scale = num_features ** 0.5
-        if learned_scale:
-            self.scale = nn.Parameter(torch.tensor(1.))
-        else:
-            self.scale = 1.
+        self.scale = nn.Parameter(torch.tensor(1.)) if learned_scale else 1.
         # self.num_features = num_features
         self.dim = dim
         self.eps = eps
@@ -558,11 +541,10 @@ class PixelLayerNorm(nn.Module):
         self.norm = nn.LayerNorm(*args, **kwargs)
 
     def forward(self, x):
-        if x.dim() == 4:
-            b, c, h, w = x.shape
-            return self.norm(x.permute(0, 2, 3, 1).view(-1, c)).view(b, h, w, c).permute(0, 3, 1, 2)
-        else:
+        if x.dim() != 4:
             return self.norm(x)
+        b, c, h, w = x.shape
+        return self.norm(x.permute(0, 2, 3, 1).view(-1, c)).view(b, h, w, c).permute(0, 3, 1, 2)
 
 
 def get_activation_norm_layer(num_features, norm_type, input_dim, **norm_params):
@@ -581,7 +563,7 @@ def get_activation_norm_layer(num_features, norm_type, input_dim, **norm_params)
     """
     input_dim = max(input_dim, 1)  # Norm1d works with both 0d and 1d inputs
 
-    if norm_type == 'none' or norm_type == '':
+    if norm_type in ['none', '']:
         norm_layer = None
     elif norm_type == 'batch':
         norm = getattr(nn, 'BatchNorm%dd' % input_dim)

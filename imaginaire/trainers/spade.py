@@ -47,10 +47,7 @@ class Trainer(BaseTrainer):
         super(Trainer, self).__init__(cfg, net_G, net_D, opt_G,
                                       opt_D, sch_G, sch_D,
                                       train_data_loader, val_data_loader)
-        if cfg.data.type == 'imaginaire.datasets.paired_videos':
-            self.video_mode = True
-        else:
-            self.video_mode = False
+        self.video_mode = cfg.data.type == 'imaginaire.datasets.paired_videos'
 
     def _init_loss(self, cfg):
         r"""Initialize loss terms.
@@ -166,8 +163,7 @@ class Trainer(BaseTrainer):
             label_lengths = self.train_data_loader.dataset.get_label_lengths()
             labels = split_labels(data['label'], label_lengths)
             # Get visualization of the segmentation mask.
-            vis_images = list()
-            vis_images.append(data['images'])
+            vis_images = [data['images']]
             net_G_output = self.net_G(data, random_style=True)
             # print(labels.keys())
             for key in labels.keys():
@@ -182,7 +178,7 @@ class Trainer(BaseTrainer):
             vis_images.append(net_G_output['fake_images'])
             if self.cfg.trainer.model_average_config.enabled:
                 net_G_model_average_output = \
-                    self.net_G.module.averaged_model(data, random_style=True)
+                        self.net_G.module.averaged_model(data, random_style=True)
                 vis_images.append(net_G_model_average_output['fake_images'])
         return vis_images
 
@@ -196,7 +192,7 @@ class Trainer(BaseTrainer):
         if not self.cfg.trainer.model_average_config.enabled:
             return
         model_average_iteration = \
-            self.cfg.trainer.model_average_config.num_batch_norm_estimation_iterations
+                self.cfg.trainer.model_average_config.num_batch_norm_estimation_iterations
         if model_average_iteration == 0:
             return
         with torch.no_grad():
@@ -206,8 +202,9 @@ class Trainer(BaseTrainer):
             self.net_G.module.averaged_model.apply(reset_batch_norm)
             for cal_it, cal_data in enumerate(data_loader):
                 if cal_it >= model_average_iteration:
-                    print('Done with {} iterations of updating batch norm '
-                          'statistics'.format(model_average_iteration))
+                    print(
+                        f'Done with {model_average_iteration} iterations of updating batch norm statistics'
+                    )
                     break
                 # cal_data = to_device(cal_data, 'cuda')
                 cal_data = self._start_of_iteration(cal_data, 0)
@@ -224,11 +221,10 @@ class Trainer(BaseTrainer):
         if self.cfg.trainer.model_average_config.enabled:
             regular_fid, average_fid = self._compute_fid()
             metric_dict = {'FID/average': average_fid, 'FID/regular': regular_fid}
-            self._write_to_meters(metric_dict, self.metric_meters, reduce=False)
         else:
             regular_fid = self._compute_fid()
             metric_dict = {'FID/regular': regular_fid}
-            self._write_to_meters(metric_dict, self.metric_meters, reduce=False)
+        self._write_to_meters(metric_dict, self.metric_meters, reduce=False)
         self._flush_meters(self.metric_meters)
 
     def _compute_fid(self):

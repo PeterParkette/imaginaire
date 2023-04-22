@@ -44,5 +44,4 @@ class DeepLabV2(nn.Module):
             align_corners=align_corners
         )
         probs = F.softmax(logits, dim=1)
-        pred = torch.argmax(probs, dim=1)
-        return pred
+        return torch.argmax(probs, dim=1)

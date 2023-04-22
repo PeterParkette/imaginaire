@@ -51,10 +51,7 @@ class PartialSequential(nn.Sequential):
 class ConstantInput(nn.Module):
     def __init__(self, channel, size=4):
         super().__init__()
-        if isinstance(size, int):
-            h, w = size, size
-        else:
-            h, w = size
+        h, w = (size, size) if isinstance(size, int) else size
         self.input = nn.Parameter(torch.randn(1, channel, h, w))
 
     def forward(self):

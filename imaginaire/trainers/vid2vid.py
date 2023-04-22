@@ -92,8 +92,8 @@ class Trainer(BaseTrainer):
         Args:
             cfg (obj): Global configuration.
         """
-        self.criteria = dict()
-        self.weights = dict()
+        self.criteria = {}
+        self.weights = {}
         trainer_cfg = cfg.trainer
         loss_weight = cfg.trainer.loss_weight
 
@@ -126,9 +126,8 @@ class Trainer(BaseTrainer):
         if self.add_dis_cfg is not None:
             for name in self.add_dis_cfg:
                 add_dis_cfg = self.add_dis_cfg[name]
-                self.weights['GAN_' + name] = add_dis_cfg.loss_weight
-                self.weights['FeatureMatching_' + name] = \
-                    loss_weight.feature_matching
+                self.weights[f'GAN_{name}'] = add_dis_cfg.loss_weight
+                self.weights[f'FeatureMatching_{name}'] = loss_weight.feature_matching
 
         # Temporal GAN loss.
         self.num_temporal_scales = get_nested_attr(self.cfg.dis,
@@ -136,7 +135,7 @@ class Trainer(BaseTrainer):
         for s in range(self.num_temporal_scales):
             self.weights['GAN_T%d' % s] = loss_weight.temporal_gan
             self.weights['FeatureMatching_T%d' % s] = \
-                loss_weight.feature_matching
+                    loss_weight.feature_matching
 
         # Flow loss. It consists of three parts: L1 loss compared to GT,
         # warping loss when used to warp images, and loss on the occlusion mask.
@@ -144,8 +143,8 @@ class Trainer(BaseTrainer):
         if self.use_flow:
             self.criteria['Flow'] = FlowLoss(cfg)
             self.weights['Flow'] = self.weights['Flow_L1'] = \
-                self.weights['Flow_Warp'] = \
-                self.weights['Flow_Mask'] = loss_weight.flow
+                    self.weights['Flow_Warp'] = \
+                    self.weights['Flow_Mask'] = loss_weight.flow
 
         # Other custom losses.
         self._define_custom_losses()
@@ -351,7 +350,7 @@ class Trainer(BaseTrainer):
                 # Create output dir for this sequence.
                 if idx == 0:
                     output_dir, seq_name = \
-                        self.create_sequence_output_dir(root_output_dir, key)
+                            self.create_sequence_output_dir(root_output_dir, key)
                     video_path = os.path.join(output_dir, '..', seq_name)
 
                 # Get output and save images.
@@ -361,7 +360,7 @@ class Trainer(BaseTrainer):
                 video.append(output)
 
             # Save output as mp4.
-            imageio.mimsave(video_path + '.mp4', video, fps=15)
+            imageio.mimsave(f'{video_path}.mp4', video, fps=15)
 
     def test_single(self, data, output_dir=None, inference_args=None):
         r"""The inference function. If output_dir exists, also save the
@@ -371,9 +370,10 @@ class Trainer(BaseTrainer):
             output_dir (str): Save image directory.
             inference_args (obj): Inference args.
         """
-        if getattr(inference_args, 'finetune', False):
-            if not getattr(self, 'has_finetuned', False):
-                self.finetune(data, inference_args)
+        if getattr(inference_args, 'finetune', False) and not getattr(
+            self, 'has_finetuned', False
+        ):
+            self.finetune(data, inference_args)
 
         net_G = self.net_G
         if self.test_in_model_average_mode:
@@ -415,12 +415,11 @@ class Trainer(BaseTrainer):
         Args:
             data (dict): Training data at the current iteration.
         """
-        vis_images = [
+        return [
             self.visualize_label(data['label'][:, -1]),
             tensor2im(data['images'][:, -1]),
             tensor2im(self.net_G_output['fake_images']),
         ]
-        return vis_images
 
     def gen_frames(self, data, use_model_average=False):
         r"""Generate a sequence of frames given a sequence of data.
@@ -432,11 +431,7 @@ class Trainer(BaseTrainer):
         """
         net_G_output = None  # Previous generator output.
         data_prev = None  # Previous data.
-        if use_model_average:
-            net_G = self.net_G.module.averaged_model
-        else:
-            net_G = self.net_G
-
+        net_G = self.net_G.module.averaged_model if use_model_average else self.net_G
         # Iterate through the length of sequence.
         all_info = {'inputs': [], 'outputs': []}
         for t in range(self.sequence_length):
@@ -473,7 +468,7 @@ class Trainer(BaseTrainer):
             with autocast(enabled=self.cfg.trainer.amp_config.enabled):
                 # Individual frame GAN loss and feature matching loss.
                 self.gen_losses['GAN'], self.gen_losses['FeatureMatching'] = \
-                    self.compute_gan_losses(net_D_output['indv'],
+                        self.compute_gan_losses(net_D_output['indv'],
                                             dis_update=False)
 
                 # Perceptual loss.
@@ -501,10 +496,12 @@ class Trainer(BaseTrainer):
                 # Additional discriminator losses.
                 if self.add_dis_cfg is not None:
                     for name in self.add_dis_cfg:
-                        (self.gen_losses['GAN_' + name],
-                         self.gen_losses['FeatureMatching_' + name]) = \
-                            self.compute_gan_losses(net_D_output[name],
-                                                    dis_update=False)
+                        (
+                            self.gen_losses[f'GAN_{name}'],
+                            self.gen_losses[f'FeatureMatching_{name}'],
+                        ) = self.compute_gan_losses(
+                            net_D_output[name], dis_update=False
+                        )
 
                 # Flow and mask loss.
                 if self.use_flow:
@@ -513,15 +510,17 @@ class Trainer(BaseTrainer):
                         data_t, net_G_output, self.current_epoch)
 
                 # Temporal GAN loss and feature matching loss.
-                if self.cfg.trainer.loss_weight.temporal_gan > 0:
-                    if self.sequence_length > 1:
-                        for s in range(self.num_temporal_scales):
-                            loss_GAN, loss_FM = self.compute_gan_losses(
-                                net_D_output['temporal_%d' % s],
-                                dis_update=False
-                            )
-                            self.gen_losses['GAN_T%d' % s] = loss_GAN
-                            self.gen_losses['FeatureMatching_T%d' % s] = loss_FM
+                if (
+                    self.cfg.trainer.loss_weight.temporal_gan > 0
+                    and self.sequence_length > 1
+                ):
+                    for s in range(self.num_temporal_scales):
+                        loss_GAN, loss_FM = self.compute_gan_losses(
+                            net_D_output['temporal_%d' % s],
+                            dis_update=False
+                        )
+                        self.gen_losses['GAN_T%d' % s] = loss_GAN
+                        self.gen_losses['FeatureMatching_T%d' % s] = loss_FM
 
                 # Other custom losses.
                 self._get_custom_gen_losses(data_t, net_G_output, net_D_output)
@@ -545,7 +544,7 @@ class Trainer(BaseTrainer):
                     self.cfg.gen_opt.clip_grad_norm
                 )
                 if torch.isfinite(total_norm) and \
-                        total_norm > self.cfg.gen_opt.clip_grad_norm:
+                            total_norm > self.cfg.gen_opt.clip_grad_norm:
                     print(f"Gradient norm of the generator ({total_norm}) "
                           f"too large, clipping it to "
                           f"{self.cfg.gen_opt.clip_grad_norm}.")
@@ -593,19 +592,21 @@ class Trainer(BaseTrainer):
                 # Additional GAN loss.
                 if self.add_dis_cfg is not None:
                     for name in self.add_dis_cfg:
-                        self.dis_losses['GAN_' + name] = \
-                            self.compute_gan_losses(net_D_output[name],
-                                                    dis_update=True)
+                        self.dis_losses[f'GAN_{name}'] = self.compute_gan_losses(
+                            net_D_output[name], dis_update=True
+                        )
 
                 # Temporal GAN loss.
-                if self.cfg.trainer.loss_weight.temporal_gan > 0:
-                    if self.sequence_length > 1:
-                        for s in range(self.num_temporal_scales):
-                            self.dis_losses['GAN_T%d' % s] = \
+                if (
+                    self.cfg.trainer.loss_weight.temporal_gan > 0
+                    and self.sequence_length > 1
+                ):
+                    for s in range(self.num_temporal_scales):
+                        self.dis_losses['GAN_T%d' % s] = \
                                 self.compute_gan_losses(
-                                    net_D_output['temporal_%d' % s],
-                                    dis_update=True
-                                )
+                                net_D_output['temporal_%d' % s],
+                                dis_update=True
+                            )
 
                 # Other custom losses.
                 self._get_custom_dis_losses(net_D_output)
@@ -629,7 +630,7 @@ class Trainer(BaseTrainer):
                     self.net_D.parameters(), self.cfg.dis_opt.clip_grad_norm
                 )
                 if torch.isfinite(total_norm) and \
-                        total_norm > self.cfg.dis_opt.clip_grad_norm:
+                            total_norm > self.cfg.dis_opt.clip_grad_norm:
                     print(f"Gradient norm of the discriminator ({total_norm}) "
                           f"too large, clipping it to "
                           f"{self.cfg.dis_opt.clip_grad_norm}.")
@@ -664,22 +665,19 @@ class Trainer(BaseTrainer):
             return self.Tensor(1).fill_(0) if dis_update else [
                 self.Tensor(1).fill_(0), self.Tensor(1).fill_(0)]
         if dis_update:
-            # Get the GAN loss for real/fake outputs.
-            GAN_loss = \
-                self.criteria['GAN'](net_D_output['pred_fake']['output'], False,
-                                     dis_update=True) + \
-                self.criteria['GAN'](net_D_output['pred_real']['output'], True,
-                                     dis_update=True)
-            return GAN_loss
-        else:
-            # Get the GAN loss and feature matching loss for fake output.
-            GAN_loss = self.criteria['GAN'](
-                net_D_output['pred_fake']['output'], True, dis_update=False)
+            return self.criteria['GAN'](
+                net_D_output['pred_fake']['output'], False, dis_update=True
+            ) + self.criteria['GAN'](
+                net_D_output['pred_real']['output'], True, dis_update=True
+            )
+        # Get the GAN loss and feature matching loss for fake output.
+        GAN_loss = self.criteria['GAN'](
+            net_D_output['pred_fake']['output'], True, dis_update=False)
 
-            FM_loss = self.criteria['FeatureMatching'](
-                net_D_output['pred_fake']['features'],
-                net_D_output['pred_real']['features'])
-            return GAN_loss, FM_loss
+        FM_loss = self.criteria['FeatureMatching'](
+            net_D_output['pred_fake']['features'],
+            net_D_output['pred_real']['features'])
+        return GAN_loss, FM_loss
 
     def get_data_t(self, data, net_G_output, data_prev, t):
         r"""Get data at current time frame given the sequence of data.
@@ -704,28 +702,29 @@ class Trainer(BaseTrainer):
         else:
             prev_labels = prev_images = None
 
-        data_t = dict()
-        data_t['label'] = label
-        data_t['image'] = image
-        data_t['prev_labels'] = prev_labels
-        data_t['prev_images'] = prev_images
-        data_t['real_prev_image'] = data['images'][:, t - 1] if t > 0 else None
-        return data_t
+        return {
+            'label': label,
+            'image': image,
+            'prev_labels': prev_labels,
+            'prev_images': prev_images,
+            'real_prev_image': data['images'][:, t - 1] if t > 0 else None,
+        }
 
     def _end_of_iteration(self, data, current_epoch, current_iteration):
         r"""Print the errors to console."""
-        if not torch.distributed.is_initialized():
-            if current_iteration % self.cfg.logging_iter == 0:
-                message = '(epoch: %d, iters: %d) ' % (current_epoch,
-                                                       current_iteration)
-                for k, v in self.gen_losses.items():
-                    if k != 'total':
-                        message += '%s: %.3f,  ' % (k, v)
-                message += '\n'
-                for k, v in self.dis_losses.items():
-                    if k != 'total':
-                        message += '%s: %.3f,  ' % (k, v)
-                print(message)
+        if torch.distributed.is_initialized():
+            return
+        if current_iteration % self.cfg.logging_iter == 0:
+            message = '(epoch: %d, iters: %d) ' % (current_epoch,
+                                                   current_iteration)
+            for k, v in self.gen_losses.items():
+                if k != 'total':
+                    message += '%s: %.3f,  ' % (k, v)
+            message += '\n'
+            for k, v in self.dis_losses.items():
+                if k != 'total':
+                    message += '%s: %.3f,  ' % (k, v)
+            print(message)
 
     def write_metrics(self):
         r"""If moving average model presents, we have two meters one for
@@ -737,13 +736,12 @@ class Trainer(BaseTrainer):
             if regular_fid is None or average_fid is None:
                 return
             metric_dict = {'FID/average': average_fid, 'FID/regular': regular_fid}
-            self._write_to_meters(metric_dict, self.metric_meters, reduce=False)
         else:
             regular_fid = self._compute_fid()
             if regular_fid is None:
                 return
             metric_dict = {'FID/regular': regular_fid}
-            self._write_to_meters(metric_dict, self.metric_meters, reduce=False)
+        self._write_to_meters(metric_dict, self.metric_meters, reduce=False)
         self._flush_meters(self.metric_meters)
 
     def _compute_fid(self):
@@ -757,7 +755,7 @@ class Trainer(BaseTrainer):
         trainer = self
         self.test_in_model_average_mode = False
         regular_fid_path = self._get_save_path('regular_fid', 'npy')
-        few_shot = True if 'few_shot' in self.cfg.data.type else False
+        few_shot = 'few_shot' in self.cfg.data.type
         regular_fid_value = compute_fid(regular_fid_path, self.val_data_loader,
                                         trainer,
                                         sample_size=self.sample_size,
@@ -773,7 +771,7 @@ class Trainer(BaseTrainer):
             self.test_in_model_average_mode = True
             # The above flag will be reset after computing FID.
             fid_path = self._get_save_path('average_fid', 'npy')
-            few_shot = True if 'few_shot' in self.cfg.data.type else False
+            few_shot = 'few_shot' in self.cfg.data.type
             fid_value = compute_fid(fid_path, self.val_data_loader,
                                     trainer_avg_mode,
                                     sample_size=self.sample_size,
@@ -897,17 +895,21 @@ class Trainer(BaseTrainer):
             image_grid = np.hstack([np.vstack(im) for im in
                                     vis_images if im is not None])
 
-            print('Save output images to {}'.format(path))
+            print(f'Save output images to {path}')
             os.makedirs(os.path.dirname(path), exist_ok=True)
             imageio.imwrite(path, image_grid)
 
             # Gather all outputs for dumping into video.
             if self.sequence_length > 1:
-                output_images = []
-                for item in all_info['outputs']:
-                    output_images.append(tensor2im(item['fake_images'])[0])
-
-                imageio.mimwrite(os.path.splitext(path)[0] + '.mp4',
-                                 output_images, fps=2, macro_block_size=None)
+                output_images = [
+                    tensor2im(item['fake_images'])[0]
+                    for item in all_info['outputs']
+                ]
+                imageio.mimwrite(
+                    f'{os.path.splitext(path)[0]}.mp4',
+                    output_images,
+                    fps=2,
+                    macro_block_size=None,
+                )
 
         self.net_G.float()

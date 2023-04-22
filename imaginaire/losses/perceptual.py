@@ -41,7 +41,7 @@ class PerceptualLoss(nn.Module):
             layers = [layers]
         if weights is None:
             weights = [1.] * len(layers)
-        elif isinstance(layers, float) or isinstance(layers, int):
+        elif isinstance(layers, (float, int)):
             weights = [weights]
 
         if dist.is_initialized() and not is_local_master():
@@ -51,8 +51,8 @@ class PerceptualLoss(nn.Module):
             torch.distributed.barrier()
 
         assert len(layers) == len(weights), \
-            'The number of layers (%s) must be equal to ' \
-            'the number of weights (%s).' % (len(layers), len(weights))
+                'The number of layers (%s) must be equal to ' \
+                'the number of weights (%s).' % (len(layers), len(weights))
         if network == 'vgg19':
             self.model = _vgg19(layers)
         elif network == 'vgg16':
@@ -68,7 +68,7 @@ class PerceptualLoss(nn.Module):
         elif network == 'vgg_face_dag':
             self.model = _vgg_face_dag(layers)
         else:
-            raise ValueError('Network %s is not recognized' % network)
+            raise ValueError(f'Network {network} is not recognized')
 
         if dist.is_initialized() and is_local_master():
             # Make sure only the first process in distributed training downloads
@@ -79,10 +79,10 @@ class PerceptualLoss(nn.Module):
         self.num_scales = num_scales
         self.layers = layers
         self.weights = weights
-        reduction = 'mean' if not per_sample_weight else 'none'
+        reduction = 'none' if per_sample_weight else 'mean'
         if criterion == 'l1':
             self.criterion = nn.L1Loss(reduction=reduction)
-        elif criterion == 'l2' or criterion == 'mse':
+        elif criterion in ['l2', 'mse']:
             self.criterion = nn.MSELoss(reduction=reduction)
         elif criterion == 'info_nce':
             self.criterion = InfoNCELoss(
@@ -93,11 +93,11 @@ class PerceptualLoss(nn.Module):
                 single_direction=True
             )
         else:
-            raise ValueError('Criterion %s is not recognized' % criterion)
+            raise ValueError(f'Criterion {criterion} is not recognized')
         self.resize = resize
         self.resize_mode = resize_mode
         print('Perceptual loss:')
-        print('\tMode: {}'.format(network))
+        print(f'\tMode: {network}')
 
     def forward(self, inp, target, per_sample_weights=None):
         r"""Perceptual loss forward.
@@ -299,10 +299,11 @@ def _robust_resnet50(layers):
     resnet50 = torchvision.models.resnet50(pretrained=False)
     state_dict = torch.utils.model_zoo.load_url(
         'http://andrewilyas.com/ImageNet.pt')
-    new_state_dict = {}
-    for k, v in state_dict['model'].items():
-        if k.startswith('module.model.'):
-            new_state_dict[k[13:]] = v
+    new_state_dict = {
+        k[13:]: v
+        for k, v in state_dict['model'].items()
+        if k.startswith('module.model.')
+    }
     resnet50.load_state_dict(new_state_dict)
     network = nn.Sequential(resnet50.conv1,
                             resnet50.bn1,
@@ -341,20 +342,16 @@ def _vgg_face_dag(layers):
         28: 'conv5_3'}
     new_state_dict = {}
     for k, v in feature_layer_name_mapping.items():
-        new_state_dict['features.' + str(k) + '.weight'] = \
-            state_dict[v + '.weight']
-        new_state_dict['features.' + str(k) + '.bias'] = \
-            state_dict[v + '.bias']
+        new_state_dict[f'features.{str(k)}.weight'] = state_dict[f'{v}.weight']
+        new_state_dict[f'features.{str(k)}.bias'] = state_dict[f'{v}.bias']
 
     classifier_layer_name_mapping = {
         0: 'fc6',
         3: 'fc7',
         6: 'fc8'}
     for k, v in classifier_layer_name_mapping.items():
-        new_state_dict['classifier.' + str(k) + '.weight'] = \
-            state_dict[v + '.weight']
-        new_state_dict['classifier.' + str(k) + '.bias'] = \
-            state_dict[v + '.bias']
+        new_state_dict[f'classifier.{str(k)}.weight'] = state_dict[f'{v}.weight']
+        new_state_dict[f'classifier.{str(k)}.bias'] = state_dict[f'{v}.bias']
 
     network.load_state_dict(new_state_dict)
 
@@ -385,9 +382,7 @@ def _vgg_face_dag(layers):
         36: 'fc7',
         39: 'fc8'
     }
-    seq_layers = []
-    for feature in network.features:
-        seq_layers += [feature]
+    seq_layers = list(network.features)
     seq_layers += [network.avgpool, Flatten()]
     for classifier in network.classifier:
         seq_layers += [classifier]

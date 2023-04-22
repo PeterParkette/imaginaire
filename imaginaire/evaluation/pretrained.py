@@ -45,9 +45,11 @@ class SwAV(nn.Module):
         self.model.fc = torch.nn.Sequential()
 
     def forward(self, x, align_corners=True):
-        y = self.model(F.interpolate(
-            x, size=(224, 224), mode='bicubic', align_corners=align_corners))
-        return y
+        return self.model(
+            F.interpolate(
+                x, size=(224, 224), mode='bicubic', align_corners=align_corners
+            )
+        )
 
 
 class Vgg16(nn.Module):
@@ -59,9 +61,11 @@ class Vgg16(nn.Module):
         )
 
     def forward(self, x, align_corners=True):
-        y = self.model(F.interpolate(
-            x, size=(224, 224), mode='bicubic', align_corners=align_corners))
-        return y
+        return self.model(
+            F.interpolate(
+                x, size=(224, 224), mode='bicubic', align_corners=align_corners
+            )
+        )
 
 
 class InceptionV3(nn.Module):
@@ -73,9 +77,11 @@ class InceptionV3(nn.Module):
         self.model.fc = torch.nn.Sequential()
 
     def forward(self, x, align_corners=True):
-        y = self.model(F.interpolate(
-            x, size=(299, 299), mode='bicubic', align_corners=align_corners))
-        return y
+        return self.model(
+            F.interpolate(
+                x, size=(299, 299), mode='bicubic', align_corners=align_corners
+            )
+        )
 
 
 class TFInceptionV3(nn.Module):
@@ -103,9 +109,11 @@ class TFInceptionV3(nn.Module):
         self.model.fc = torch.nn.Sequential()
 
     def forward(self, x, align_corners=True):
-        y = self.model(F.interpolate(
-            x, size=(299, 299), mode='bicubic', align_corners=align_corners))
-        return y
+        return self.model(
+            F.interpolate(
+                x, size=(299, 299), mode='bicubic', align_corners=align_corners
+            )
+        )
 
 
 class FIDInceptionA(inception.InceptionA):

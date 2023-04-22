@@ -73,7 +73,17 @@ class Augmentor(object):
         """
         augs = []
         for key, value in self.individual_video_frame_aug_list.items():
-            if key == 'random_scale_limit':
+            if key == 'random_crop_h_w':
+                h, w = value.split(',')
+                h, w = int(h), int(w)
+                self.crop_h, self.crop_w = h, w
+                augs.extend(
+                    (
+                        alb.PadIfNeeded(min_height=h, min_width=w),
+                        alb.RandomCrop(h, w, always_apply=True, p=1),
+                    )
+                )
+            elif key == 'random_scale_limit':
                 if type(value) == float:
                     scale_limit_lb = scale_limit_ub = value
                     p = 1
@@ -82,12 +92,6 @@ class Augmentor(object):
                     scale_limit_ub = value['scale_limit_ub']
                     p = value['p']
                 augs.append(alb.RandomScale(scale_limit=(-scale_limit_lb, scale_limit_ub), p=p))
-            elif key == 'random_crop_h_w':
-                h, w = value.split(',')
-                h, w = int(h), int(w)
-                self.crop_h, self.crop_w = h, w
-                augs.append(alb.PadIfNeeded(min_height=h, min_width=w))
-                augs.append(alb.RandomCrop(h, w, always_apply=True, p=1))
         return augs
 
     def _build_augmentation_ops(self):
@@ -141,8 +145,6 @@ class Augmentor(object):
                 # was applied in order to correctly modify keypoint data.
                 if value:
                     augs.append(alb.HorizontalFlip(always_apply=False, p=0.5))
-            # The options below including contrast, blur, motion_blur, compression, gamma
-            # were used during developing face-vid2vid.
             elif key == 'contrast':
                 brightness_limit = value['brightness_limit']
                 contrast_limit = value['contrast_limit']
@@ -169,9 +171,9 @@ class Augmentor(object):
             elif key == 'max_time_step':
                 self.max_time_step = value
                 assert self.max_time_step >= 1, \
-                    'max_time_step has to be at least 1'
+                        'max_time_step has to be at least 1'
             else:
-                raise ValueError('Unknown augmentation %s' % (key))
+                raise ValueError(f'Unknown augmentation {key}')
         return augs
 
     def _choose_image_key(self, inputs):
@@ -221,13 +223,9 @@ class Augmentor(object):
                 # Image-type.
                 # Find the target type (image/mask) based on interpolation
                 # method.
-                if self.is_mask[data_type]:
-                    target_type = 'mask'
-                else:
-                    target_type = 'image'
+                target_type = 'mask' if self.is_mask[data_type] else 'image'
             else:
-                raise ValueError(
-                    'Data type: %s is not image or keypoint' % (data_type))
+                raise ValueError(f'Data type: {data_type} is not image or keypoint')
 
             current_data_type_inputs = inputs[data_type]
             if not isinstance(current_data_type_inputs, list):
@@ -414,7 +412,7 @@ class Augmentor(object):
         # Check within data type.
         for data_type in inputs:
             if data_type in self.keypoint_data_types or \
-                    data_type not in self.image_data_types:
+                        data_type not in self.image_data_types:
                 continue
             for idx in range(len(inputs[data_type])):
                 if idx == 0:
@@ -425,9 +423,9 @@ class Augmentor(object):
                     # assert this_w / (1.0 * this_h) == w / (1.0 * h)
         # Check across data types.
         if paired and self.resize_smallest_side is not None:
-            for idx, data_type in enumerate(inputs):
+            for data_type in inputs:
                 if data_type in self.keypoint_data_types or \
-                        data_type not in self.image_data_types:
+                            data_type not in self.image_data_types:
                     continue
         if paired:
             return self._perform_paired_augmentation(inputs, augment_ops)
@@ -524,11 +522,11 @@ def get_paired_input_image_channel_number(data_cfg):
         num_channels (int): Number of input image channels.
     """
     num_channels = 0
-    for ix, data_type in enumerate(data_cfg.input_types):
+    for data_type in data_cfg.input_types:
         for k in data_type:
             if k in data_cfg.input_image:
                 num_channels += data_type[k].num_channels
-                print('Concatenate %s for input.' % data_type)
+                print(f'Concatenate {data_type} for input.')
     print('\tNum. of channels in the input image: %d' % num_channels)
     return num_channels
 
@@ -545,7 +543,7 @@ def get_paired_input_label_channel_number(data_cfg, video=False):
     num_labels = 0
     if not hasattr(data_cfg, 'input_labels'):
         return num_labels
-    for ix, data_type in enumerate(data_cfg.input_types):
+    for data_type in data_cfg.input_types:
         for k in data_type:
             if k in data_cfg.input_labels:
                 if hasattr(data_cfg, 'one_hot_num_classes') and k in data_cfg.one_hot_num_classes:
@@ -554,7 +552,7 @@ def get_paired_input_label_channel_number(data_cfg, video=False):
                         num_labels += 1
                 else:
                     num_labels += data_type[k].num_channels
-            print('Concatenate %s for input.' % data_type)
+            print(f'Concatenate {data_type} for input.')
 
     if video:
         num_time_steps = getattr(data_cfg.train, 'initial_sequence_length',

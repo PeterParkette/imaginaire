@@ -28,9 +28,7 @@ class Cache(object):
               (size_GB, self.cache.directory))
 
     def read(self, key):
-        if key in self.cache:
-            return self.cache[key]
-        return False
+        return self.cache[key] if key in self.cache else False
 
     def write(self, key, value):
         try:

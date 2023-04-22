@@ -34,10 +34,11 @@ def concat_labels(cfg, is_inference, data):
     for data_type in input_labels:
         label = data.pop(data_type)
         labels.append(label)
-    if not ('video' in dataset_type):
-        data['label'] = torch.cat(labels, dim=0)
-    else:
-        data['label'] = torch.cat(labels, dim=1)
+    data['label'] = (
+        torch.cat(labels, dim=1)
+        if 'video' in dataset_type
+        else torch.cat(labels, dim=0)
+    )
     return data
 
 
@@ -51,10 +52,11 @@ def concat_few_shot_labels(cfg, is_inference, data):
     for data_type in input_labels:
         label = data.pop(data_type)
         labels.append(label)
-    if not ('video' in dataset_type):
-        data['few_shot_label'] = torch.cat(labels, dim=0)
-    else:
-        data['few_shot_label'] = torch.cat(labels, dim=1)
+    data['few_shot_label'] = (
+        torch.cat(labels, dim=1)
+        if 'video' in dataset_type
+        else torch.cat(labels, dim=0)
+    )
     return data
 
 

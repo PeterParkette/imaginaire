@@ -38,7 +38,7 @@ def save_intermediate_training_results(
         logdir, 'images',
         'epoch_{:05}iteration{:09}.jpg'.format(
             current_epoch, current_iteration))
-    print('Save output images to {}'.format(output_filename))
+    print(f'Save output images to {output_filename}')
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
     image_grid = torchvision.utils.make_grid(
         visualization_images.data, nrow=1, padding=0, normalize=False)
@@ -70,8 +70,7 @@ def download_file(URL, destination):
     """
     session = requests.Session()
     response = session.get(URL, stream=True)
-    token = get_confirm_token(response)
-    if token:
+    if token := get_confirm_token(response):
         params = {'confirm': token}
         response = session.get(URL, params=params, stream=True)
     save_response_content(response, destination)
@@ -86,10 +85,14 @@ def get_confirm_token(response):
     Returns:
 
     """
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            return value
-    return None
+    return next(
+        (
+            value
+            for key, value in response.cookies.items()
+            if key.startswith('download_warning')
+        ),
+        None,
+    )
 
 
 def save_response_content(response, destination):
@@ -127,7 +130,7 @@ def get_checkpoint(checkpoint_path, url=''):
     if not os.path.exists(full_checkpoint_path):
         os.makedirs(os.path.dirname(full_checkpoint_path), exist_ok=True)
         if is_master():
-            print('Downloading {}'.format(url))
+            print(f'Downloading {url}')
             if 'pbss.s8k.io' not in url:
                 url = f"https://docs.google.com/uc?export=download&id={url}"
             download_file(url, full_checkpoint_path)

@@ -167,17 +167,15 @@ class Trainer(BaseTrainer):
         self._time_before_loss()
 
         if 'GAN' in self.criteria or 'PGAN' in self.criteria:
-            incl_pseudo_real = False
-            if 'FeatureMatching' in self.criteria:
-                incl_pseudo_real = True
+            incl_pseudo_real = 'FeatureMatching' in self.criteria
             net_D_output = self.net_D(data, net_G_output, incl_real=False, incl_pseudo_real=incl_pseudo_real)
             output_fake = net_D_output['fake_outputs']  # Choose from real_outputs and fake_outputs.
 
             gan_loss = self.criteria['GAN'](output_fake, True, dis_update=False)
-            if 'GAN' in self.criteria:
-                self.gen_losses['GAN'] = gan_loss
-            if 'PGAN' in self.criteria:
-                self.gen_losses['PGAN'] = gan_loss
+        if 'GAN' in self.criteria:
+            self.gen_losses['GAN'] = gan_loss
+        if 'PGAN' in self.criteria:
+            self.gen_losses['PGAN'] = gan_loss
 
         if 'FeatureMatching' in self.criteria:
             self.gen_losses['FeatureMatching'] = self.criteria['FeatureMatching'](
@@ -217,12 +215,8 @@ class Trainer(BaseTrainer):
             net_G_output = self.net_G(data, random_style=False)
             net_G_output['fake_images'] = net_G_output['fake_images'].detach()
 
-        incl_real = False
-        incl_pseudo_real = False
-        if 'GAN' in self.criteria:
-            incl_real = True
-        if 'PGAN' in self.criteria:
-            incl_pseudo_real = True
+        incl_real = 'GAN' in self.criteria
+        incl_pseudo_real = 'PGAN' in self.criteria
         net_D_output = self.net_D(data, net_G_output, incl_real=incl_real, incl_pseudo_real=incl_pseudo_real)
 
         self._time_before_loss()
@@ -236,7 +230,7 @@ class Trainer(BaseTrainer):
             self.dis_losses['GAN/fake'] = fake_loss
             self.dis_losses['GAN/true'] = true_loss
             self.dis_losses['GAN'] = fake_loss + true_loss
-            total_loss = total_loss + self.dis_losses['GAN'] * self.weights['GAN']
+            total_loss += self.dis_losses['GAN'] * self.weights['GAN']
         if 'PGAN' in self.criteria:
             output_fake = net_D_output['fake_outputs']
             output_pseudo_real = net_D_output['pseudo_real_outputs']
@@ -246,7 +240,7 @@ class Trainer(BaseTrainer):
             self.dis_losses['PGAN/fake'] = fake_loss
             self.dis_losses['PGAN/true'] = true_loss
             self.dis_losses['PGAN'] = fake_loss + true_loss
-            total_loss = total_loss + self.dis_losses['PGAN'] * self.weights['PGAN']
+            total_loss += self.dis_losses['PGAN'] * self.weights['PGAN']
 
         self.dis_losses['total'] = total_loss
         return total_loss

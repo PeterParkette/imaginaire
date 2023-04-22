@@ -9,8 +9,8 @@ import os
 
 im1_fn = 'frame_0010.png'
 im2_fn = 'frame_0011.png'
-im1_url = 'https://github.com/NVlabs/PWC-Net/raw/master/PyTorch/data/' + im1_fn
-im2_url = 'https://github.com/NVlabs/PWC-Net/raw/master/PyTorch/data/' + im2_fn
+im1_url = f'https://github.com/NVlabs/PWC-Net/raw/master/PyTorch/data/{im1_fn}'
+im2_url = f'https://github.com/NVlabs/PWC-Net/raw/master/PyTorch/data/{im2_fn}'
 if not os.path.exists(im1_fn):
     wget.download(im1_url, out=im1_fn)
 if not os.path.exists(im2_fn):

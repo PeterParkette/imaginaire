@@ -49,10 +49,7 @@ class ObjectStoreDataset(data.Dataset):
         filename_info = self._get_object(self.all_filenames_key)
         self.sequence_list = json.loads(filename_info.decode('utf-8'))
 
-        # Get length.
-        length = 0
-        for _, value in self.sequence_list.items():
-            length += len(value)
+        length = sum(len(value) for _, value in self.sequence_list.items())
         self.length = length
 
         # Read metadata.
@@ -60,7 +57,7 @@ class ObjectStoreDataset(data.Dataset):
         self.extensions = json.loads(metadata_info.decode('utf-8'))
         self.data_type = data_type
 
-        print('AWS S3 bucket at %s opened.' % (root + '/' + self.data_type))
+        print(f'AWS S3 bucket at {root}/{self.data_type} opened.')
 
     def _get_object(self, key):
         r"""Download object from bucket.
@@ -80,7 +77,7 @@ class ObjectStoreDataset(data.Dataset):
                 s3_response_object = s3.get_object(Bucket=self.bucket, Key=key)
                 object_content = s3_response_object['Body'].read()
             except Exception as e:
-                print('%s not found' % (key))
+                print(f'{key} not found')
                 print(e)
             # Save content to cache.
             if self.cache:
@@ -101,13 +98,13 @@ class ObjectStoreDataset(data.Dataset):
         is_image = False
         is_hdr = False
         parts = path.split('/')
-        key = parts[0] + '/' + data_type + '/' + '/'.join(parts[1:]) + '.' + ext
+        key = f'{parts[0]}/{data_type}/' + '/'.join(parts[1:]) + '.' + ext
         if ext in IMG_EXTENSIONS:
             is_image = True
             if 'tif' in ext:
                 _, mode = np.uint16, -1
             elif 'JPEG' in ext or 'JPG' in ext \
-                    or 'jpeg' in ext or 'jpg' in ext:
+                        or 'jpeg' in ext or 'jpg' in ext:
                 _, mode = np.uint8, 3
             else:
                 _, mode = np.uint8, -1

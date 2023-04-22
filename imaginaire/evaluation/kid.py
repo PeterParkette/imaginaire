@@ -116,8 +116,7 @@ def compute_kid_data(kid_path, data_loader_a, data_loader_b,
         sample_size = min_data_size
     else:
         sample_size = min(sample_size, min_data_size)
-    print('Computing KID using {} images from both distributions.'.
-          format(sample_size))
+    print(f'Computing KID using {sample_size} images from both distributions.')
     path_a = os.path.join(os.path.dirname(kid_path),
                           'activations_a.npy')
     act_a = load_or_compute_activations(path_a, data_loader_a,
@@ -158,13 +157,14 @@ def _polynomial_mmd_averages(codes_g, codes_r, n_subsets, subset_size,
 
     if subset_size is None:
         subset_size = min(len(codes_r), len(codes_r))
-        print("Subset size not provided, "
-              "setting it to the data size ({}).".format(subset_size))
+        print(
+            f"Subset size not provided, setting it to the data size ({subset_size})."
+        )
     if subset_size > len(codes_g) or subset_size > len(codes_r):
         subset_size = min(len(codes_r), len(codes_r))
         warnings.warn(
-            "Subset size is large than the actual data size, "
-            "setting it to the data size ({}).".format(subset_size))
+            f"Subset size is large than the actual data size, setting it to the data size ({subset_size})."
+        )
 
     for i in range(n_subsets):
         g = codes_g[choice(len(codes_g), subset_size, replace=False)]

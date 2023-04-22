@@ -35,19 +35,18 @@ class GANLoss(nn.Module):
         Returns:
             loss (tensor): Loss value.
         """
-        if isinstance(input_x, list):
-            loss = 0
-            for pred_i in input_x:
-                if isinstance(pred_i, list):
-                    pred_i = pred_i[-1]
-                loss_tensor = self.loss(pred_i, t_real, weight,
-                                        reduce_dim, dis_update)
-                bs = 1 if len(loss_tensor.size()) == 0 else loss_tensor.size(0)
-                new_loss = torch.mean(loss_tensor.view(bs, -1), dim=1)
-                loss += new_loss
-            return loss / len(input_x)
-        else:
+        if not isinstance(input_x, list):
             return self.loss(input_x, t_real, weight, reduce_dim, dis_update)
+        loss = 0
+        for pred_i in input_x:
+            if isinstance(pred_i, list):
+                pred_i = pred_i[-1]
+            loss_tensor = self.loss(pred_i, t_real, weight,
+                                    reduce_dim, dis_update)
+            bs = 1 if len(loss_tensor.size()) == 0 else loss_tensor.size(0)
+            new_loss = torch.mean(loss_tensor.view(bs, -1), dim=1)
+            loss += new_loss
+        return loss / len(input_x)
 
     def loss(self, input_x, t_real, weight=None,
              reduce_dim=True, dis_update=True):
